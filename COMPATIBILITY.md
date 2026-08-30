@@ -7,9 +7,10 @@ though incorporating one takes the lockstep procedure in
 
 Design goal: **fail loudly and safely, never silently weaken a guarantee.**
 
-Verified against `kimi-code 0.35.0` on 2026-08-12 by running the binary. The captures are in
-[`docs/kimi-help/0.35.0/`](docs/kimi-help/0.35.0/), including `M0-FINDINGS.md`, which records the
-probes and their results.
+Verified against `kimi-code 0.35.0` on 2026-08-12 and re-verified against `0.39.1` on 2026-08-30,
+both by running the binary. The captures are in [`docs/kimi-help/`](docs/kimi-help/) under each
+version, including `M0-FINDINGS.md`, which records the probes and their results. The 0.39.1 pass
+moved no guarantee.
 
 ## Platform support
 

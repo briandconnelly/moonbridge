@@ -5,6 +5,25 @@ All notable changes to this project are documented here, following
 
 ## [Unreleased]
 
+### Added
+
+- `kimi-code 0.39.1` to `SUPPORTED_VERSIONS`, after re-running the full probe set from
+  `docs/UPGRADING-KIMI.md` against the binary. Captures and results:
+  `docs/kimi-help/0.39.1/` (`M0-FINDINGS.md`). No guarantee moved — the read-only
+  `--agent-file` allowlist, the confidentiality limit, the silent-effort-ignore, the
+  worktree's non-containment, the argv ceiling, and the `stream-json` line shapes all
+  hold, and the agent-visible manifest is byte-identical, so `FINGERPRINT` is unchanged.
+
+### Fixed
+
+- A second captured invalid-model message,
+  `model X does not resolve to a configured provider`, now classifies as `invalid_model`.
+  kimi emits it when `config.toml`'s `default_model` names an alias with no
+  `[models."..."]` section, failing while it resolves the default and so reaching the
+  classifier even on a run that passed a valid `--model`. It previously matched no
+  signature and surfaced as a generic error, pointing operators at an upgrade bug rather
+  than at their own config.
+
 ## [0.2.0] - 2026-08-18
 
 ### Added

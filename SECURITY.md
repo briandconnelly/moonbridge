@@ -7,8 +7,9 @@ on this repository rather than opening a public issue.
 
 ## Security model
 
-Everything below was verified by running `kimi-code 0.35.0`. Where a property does not hold, this
-document says so rather than describing an intention.
+Everything below was verified by running `kimi-code 0.35.0`, and re-verified against `0.39.1`
+(every property below still holds). Where a property does not hold, this document says so rather
+than describing an intention.
 
 ### What actually constrains a run
 
