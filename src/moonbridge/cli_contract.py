@@ -7,8 +7,8 @@ change is centralized, greppable, and testable. Revising it takes the lockstep p
 docs/UPGRADING-KIMI.md, not an edit to this file alone. See COMPATIBILITY.md for the
 assumption -> upstream-source map.
 
-Verified against `kimi-code 0.35.0` on 2026-08-12 by running the binary; the captures live
-in docs/kimi-help/0.35.0/.
+Verified against `kimi-code 0.35.0` on 2026-08-12 and re-verified against `0.39.1` on
+2026-08-30 by running the binary; the captures live in docs/kimi-help/<version>/.
 
 --- How this differs from the Codex contract, and why it matters -------------------------
 
@@ -185,7 +185,7 @@ SANDBOX_DANGER_FULL = "danger-full-access"
 VALID_SANDBOXES = (SANDBOX_READ_ONLY, SANDBOX_WORKSPACE_WRITE, SANDBOX_DANGER_FULL)
 
 # --- Versions --------------------------------------------------------------------------
-SUPPORTED_VERSIONS = frozenset({(0, 35)})
+SUPPORTED_VERSIONS = frozenset({(0, 35), (0, 39)})
 SUPPORTED_VERSIONS_ENV = "MOONBRIDGE_SUPPORTED_VERSIONS"
 
 # --- Models ----------------------------------------------------------------------------
@@ -296,9 +296,23 @@ _DRIFT_PATTERNS = (
     re.compile(r"unknown command", re.I),
 )
 
-# A caller-supplied model alias kimi does not know. Verified message on 0.35.0:
-#   error: failed to run prompt: Model "X" is not configured in config.toml.
-_INVALID_MODEL_PATTERN = re.compile(r'Model ".*?" is not configured in config\.toml', re.I)
+# A model alias kimi cannot resolve. TWO captured phrasings, both meaning "the alias is
+# the caller's problem, not an upstream change" — so both must classify as invalid_model
+# rather than drift. Do not invent a third; capture it first.
+#
+#   0.35.0 and 0.39.1, unknown `-m` alias:
+#     error: failed to run prompt: Model "X" is not configured in config.toml.
+#   0.39.1, config.toml `default_model` naming an alias with no [models."..."] section:
+#     error: failed to run prompt: model X does not resolve to a configured provider
+#
+# The second fires while kimi resolves the DEFAULT model, before any -m override applies,
+# so it reaches the classifier even on a run that passed a perfectly good --model. Before
+# it was captured the failure matched no signature at all and surfaced as a generic error,
+# which pointed the operator at an upgrade bug instead of at their own config.toml.
+_INVALID_MODEL_PATTERNS = (
+    re.compile(r'Model ".*?" is not configured in config\.toml', re.I),
+    re.compile(r"\bdoes not resolve to a configured provider\b", re.I),
+)
 
 # Rate limiting is reported by the configured provider, not by kimi itself.
 _RATE_LIMIT_PATTERNS = (
@@ -359,8 +373,9 @@ def is_contract_drift(*texts: str | None) -> bool:
 
 
 def is_invalid_model(*texts: str | None) -> bool:
-    """Whether kimi rejected the requested -m alias as absent from config.toml."""
-    return _any((_INVALID_MODEL_PATTERN,), texts)
+    """Whether kimi could not resolve a model alias — the requested one or the configured
+    default. Either way the fix is the caller's config, not an upgrade."""
+    return _any(_INVALID_MODEL_PATTERNS, texts)
 
 
 def is_rate_limited(*texts: str | None) -> bool:
@@ -435,7 +450,7 @@ PONTONIER_CONTRACT = _pontonier_contract.BackendContract(
     failure_signatures=_pontonier_contract.FailureSignatures(
         auth=tuple(f"(?i){p.pattern}" for p in _AUTH_PATTERNS),
         contract_drift=tuple(f"(?i){p.pattern}" for p in _DRIFT_PATTERNS),
-        invalid_model=(f"(?i){_INVALID_MODEL_PATTERN.pattern}",),
+        invalid_model=tuple(f"(?i){p.pattern}" for p in _INVALID_MODEL_PATTERNS),
         rate_limited=tuple(f"(?i){p.pattern}" for p in _RATE_LIMIT_PATTERNS),
     ),
     limits=_pontonier_contract.Limits(

@@ -106,8 +106,38 @@ def test_invalid_model_matches_the_captured_message():
     assert cli_contract.is_invalid_model(blob)
 
 
+def test_invalid_model_matches_the_unresolved_default_model_message():
+    """The second captured invalid-model phrasing, from kimi-code 0.39.1.
+
+    Emitted when config.toml's `default_model` names an alias with no `[models."..."]`
+    section: kimi fails while resolving the default, before any -m override applies.
+    Captured verbatim (docs/kimi-help/0.39.1/M0-FINDINGS.md); without it the failure
+    classified as neither invalid_model nor drift and surfaced as a generic error.
+    """
+    blob = (
+        "error: failed to run prompt: model runpod/kimi-k3 "
+        "does not resolve to a configured provider"
+    )
+    assert cli_contract.is_invalid_model(blob)
+
+
+def test_unresolved_default_model_is_not_reported_as_contract_drift():
+    """It is the user's config, not an upstream change — misreporting it as drift would
+    tell the operator to file an upgrade bug instead of fixing default_model."""
+    blob = (
+        "error: failed to run prompt: model runpod/kimi-k3 "
+        "does not resolve to a configured provider"
+    )
+    assert not cli_contract.is_contract_drift(blob)
+
+
 def test_invalid_model_does_not_match_unrelated_model_talk():
     assert not cli_contract.is_invalid_model("the model is configured and working")
+
+
+def test_invalid_model_does_not_match_a_successful_provider_resolution():
+    """Guard the widened pattern: "resolve"/"provider" prose alone must not trip it."""
+    assert not cli_contract.is_invalid_model("model runpod/kimi-k3 resolved to provider runpod")
 
 
 @pytest.mark.parametrize(
@@ -158,6 +188,11 @@ def test_parse_retry_after_distinguishes_zero_from_absent():
 # --------------------------------------------------------------------------- #
 def test_supported_versions_tracks_the_verified_release():
     assert (0, 35) in cli_contract.SUPPORTED_VERSIONS
+
+
+def test_supported_versions_includes_the_reverified_0_39_release():
+    """0.39.1 was re-verified probe-by-probe; captures in docs/kimi-help/0.39.1/."""
+    assert (0, 39) in cli_contract.SUPPORTED_VERSIONS
 
 
 def test_model_slug_pattern_accepts_a_real_alias():
