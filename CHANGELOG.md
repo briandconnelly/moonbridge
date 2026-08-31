@@ -5,6 +5,19 @@ All notable changes to this project are documented here, following
 
 ## [Unreleased]
 
+### Changed
+
+- `pontonier` 0.5.0 -> 0.7.0. Two upstream minors, both compatible with this bridge:
+  `CONTRACT_API_VERSION` stays 1 and the 0.7.0 addition (`RunRequest.instructions_append`)
+  is a defaulted field this bridge does not set. The one entry that reaches an agent is
+  0.6.0's: `redaction.exc_summary` now strips Unicode `Cc` code points before redacting,
+  so exception text carrying a control character produces different message text. Verified
+  by running it — an `ESC`/`NUL`-bearing exception comes back stripped. This bridge feeds
+  `exc_summary` into `error.message` prose in three places, which is human-readable prose
+  only, so per Versioning it moves no fingerprint and is not breaking; the built manifest
+  is byte-identical. The change is a hardening: a control character wedged into a secret
+  previously defeated the redactor's patterns outright.
+
 ### Added
 
 - `kimi-code 0.39.1` to `SUPPORTED_VERSIONS`, after re-running the full probe set from
