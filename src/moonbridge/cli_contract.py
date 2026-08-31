@@ -309,9 +309,21 @@ _DRIFT_PATTERNS = (
 # so it reaches the classifier even on a run that passed a perfectly good --model. Before
 # it was captured the failure matched no signature at all and surfaced as a generic error,
 # which pointed the operator at an upgrade bug instead of at their own config.toml.
+#
+# BOTH patterns are anchored on text only kimi emits — the first on the quoted alias plus
+# `config.toml`, the second on the `failed to run prompt:` prefix. The second one MUST keep
+# that anchor: unlike the first, its tail ("does not resolve to a configured provider") is
+# an ordinary English clause, and `kimi.classify_failure` tests invalid_model FIRST — ahead
+# of drift, auth, and rate limiting — over `run.stdout` and `last_message`, which carry the
+# MODEL'S OWN prose. Unanchored, a run that merely DISCUSSES this failure would outrank its
+# real cause: genuine drift would be reported as invalid_model (silencing the one signal
+# this contract says must always be loud) and a rate limit would lose its retry_after_ms.
+# Reviewing this very repository is enough to produce such prose. Prefer a false negative
+# (a generic error, which is what this failure got before it was captured) over a false
+# positive that masks drift.
 _INVALID_MODEL_PATTERNS = (
     re.compile(r'Model ".*?" is not configured in config\.toml', re.I),
-    re.compile(r"\bdoes not resolve to a configured provider\b", re.I),
+    re.compile(r"failed to run prompt: model \S+ does not resolve to a configured provider", re.I),
 )
 
 # Rate limiting is reported by the configured provider, not by kimi itself.
@@ -376,6 +388,18 @@ def is_invalid_model(*texts: str | None) -> bool:
     """Whether kimi could not resolve a model alias — the requested one or the configured
     default. Either way the fix is the caller's config, not an upgrade."""
     return _any(_INVALID_MODEL_PATTERNS, texts)
+
+
+def is_unresolved_default_model(*texts: str | None) -> bool:
+    """Whether the unresolvable alias is config.toml's `default_model` rather than the
+    caller's `-m` argument.
+
+    Both causes share the invalid_model code, but they need OPPOSITE repair advice: the
+    generic hint ("omit model to use the configured default_model") is the one action that
+    cannot help here, because default_model is the broken thing. See
+    _INVALID_MODEL_PATTERNS for the captured messages.
+    """
+    return _any((_INVALID_MODEL_PATTERNS[1],), texts)
 
 
 def is_rate_limited(*texts: str | None) -> bool:

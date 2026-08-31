@@ -22,7 +22,14 @@ All notable changes to this project are documented here, following
   `[models."..."]` section, failing while it resolves the default and so reaching the
   classifier even on a run that passed a valid `--model`. It previously matched no
   signature and surfaced as a generic error, pointing operators at an upgrade bug rather
-  than at their own config.
+  than at their own config. The pattern is anchored on kimi's `failed to run prompt:`
+  prefix: its tail is ordinary English, and `classify_failure` tests invalid_model first
+  over the model's own output, so an unanchored clause could mask genuine contract drift.
+- An unresolvable `default_model` no longer blames the caller's `model` argument. Both
+  causes still share the `invalid_model` code, but the configured-default case now names
+  `config.toml` and drops `details.field = "model"` — previously it advised omitting
+  `model` to fall back on `default_model`, the one action that cannot help when
+  `default_model` is itself the broken thing, leaving a caller circling a repair loop.
 
 ## [0.2.0] - 2026-08-18
 

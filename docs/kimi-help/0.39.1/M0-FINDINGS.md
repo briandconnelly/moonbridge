@@ -64,6 +64,14 @@ error: failed to run prompt: Model "X" is not configured in config.toml.
 error: failed to run prompt: model X does not resolve to a configured provider
 ```
 
+Verbatim, as observed on this host (the probe config's `default_model` was
+`runpod/kimi-k3`, an alias with no `[models."..."]` section):
+
+```
+error: failed to run prompt: Model "definitely-bogus-alias-xyz" is not configured in config.toml.
+error: failed to run prompt: model runpod/kimi-k3 does not resolve to a configured provider
+```
+
 The first is the 0.35.0 message, for an unknown `-m` alias — unchanged, and `--model` is
 still honoured (a bogus alias is rejected by name).
 
@@ -76,7 +84,18 @@ installed to test, so this is recorded as newly captured, not as new behavior.
 Measured against the classifier as it stood, this string matched `is_invalid_model` =
 False and `is_contract_drift` = False: it surfaced as a generic error, pointing an operator
 at an upgrade bug instead of at their own `config.toml`. `_INVALID_MODEL_PATTERNS` now
-carries both phrasings.
+carries both phrasings, **anchored on the `failed to run prompt:` prefix**. The anchor is
+load-bearing: the second message's tail is an ordinary English clause, and
+`kimi.classify_failure` tests invalid_model first, over `run.stdout` and `last_message` —
+the model's own prose. Unanchored, a run that merely discussed this failure could mask
+genuine contract drift, which must always fail loudly. A false negative here is only the
+generic error this failure already produced; a false positive silences drift.
+
+The two causes also carry different repair guidance. They share the `invalid_model` code,
+but an unresolvable `default_model` reaches the classifier even when the caller's `model`
+argument was valid, so the generic hint ("omit model to use the configured default_model")
+names the one action that cannot work. `_unresolved_default_model_error` therefore drops
+`field="model"` and names `config.toml` instead.
 
 ## Environment notes (not version findings)
 

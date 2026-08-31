@@ -463,6 +463,23 @@ def _extra_args_rejected_error(matched: list[str]) -> ErrorInfo:
     )
 
 
+def _unresolved_default_model_error() -> ErrorInfo:
+    """Error for an unresolvable `default_model` in the user's config.toml.
+
+    Shares the invalid_model code with _invalid_model_error (no new code, so the discovered
+    error-code set is unchanged), but deliberately carries NO `field="model"`: this failure
+    reaches the classifier even when the caller's `model` argument was valid, so blaming
+    that argument would send the caller round a repair loop it cannot exit.
+    """
+    return make_error(
+        "invalid_model",
+        "Kimi could not resolve the `default_model` in its config.toml — the alias names "
+        'no `[models."..."]` section. This is the CONFIGURED DEFAULT, not the `model` you '
+        "passed, so overriding or omitting `model` will not help; the fix is to correct "
+        '`default_model` in config.toml (or add the matching `[models."..."]` section).',
+    )
+
+
 def classify_failure(
     run: CommandRun,
     *,
@@ -498,6 +515,10 @@ def classify_failure(
     _ = reasoning_effort
     event_error = normalize.extract_error_message(events) if events else None
     if cli_contract.is_invalid_model(run.stderr, run.stdout, last_message, event_error):
+        if cli_contract.is_unresolved_default_model(
+            run.stderr, run.stdout, last_message, event_error
+        ):
+            return _unresolved_default_model_error()
         return _invalid_model_error()
     if cli_contract.is_auth_failure(run.stderr, run.stdout, last_message, event_error):
         return _auth_error()

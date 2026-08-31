@@ -221,10 +221,12 @@ _REPAIR_BY_CODE: dict[str, tuple[RepairStep, str | None, bool, str]] = {
         "correct_arguments",
         "kimi_models",
         False,
-        "Kimi has no such model alias. `-m` takes an ALIAS defined in the user's "
+        "Kimi could not resolve a model alias. `-m` takes an ALIAS defined in the user's "
         'config.toml (e.g. a `[models."..."]` key), not a raw provider model id. '
         "Call kimi_models for the configured aliases, or omit model to use the "
-        "configured default_model.",
+        "configured default_model. If the message names the CONFIGURED DEFAULT rather "
+        "than the alias you passed, neither will help — that is a broken `default_model` "
+        "in config.toml, which only the user can fix.",
     ),
     "extra_args_rejected": (
         "correct_config",
