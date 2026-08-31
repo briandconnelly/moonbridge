@@ -32,7 +32,8 @@ has no sandbox or approval prompts, and a throwaway worktree is not a security b
 
 ## Requirements
 
-- `kimi` (Kimi Code) **0.35.x** — the version this release is verified against
+- `kimi` (Kimi Code) **0.35.x** or **0.39.x** — the supported minors. Probed on `0.35.0`
+  and `0.39.1`; other patch releases in those minors are assumed compatible, not verified
 - Python ≥ 3.11, `uv`, and `git`
 - macOS or Linux
 - Claude Code, Codex, or another MCP client that can launch a local stdio server
@@ -91,7 +92,7 @@ shortcuts. In Codex, `/plugins` lets you browse, enable, or disable the installe
 ## Safety model
 
 Read this before pointing it at anything sensitive. Every statement below was verified by running
-`kimi-code 0.35.0`, not inferred from its documentation.
+`kimi-code 0.35.0` and again on `0.39.1`, not inferred from its documentation.
 
 **The `kimi` CLI has no sandbox and no approval prompts.** Prompt mode (`kimi -p`) forces
 autonomous mode and runs shell commands and file writes with your own user's privileges. Unlike
@@ -163,7 +164,7 @@ Environment variables, all prefixed `MOONBRIDGE_`:
 | `JOB_TTL` / `JOB_MAX_SECONDS` / `JOB_MAX_COUNT` | 86400 / 1800 / 50 | background job limits |
 | `STATE_DIR` | `~/.cache/moonbridge/jobs` | job records |
 | `LOG_LEVEL` / `LOG_FILE` | `WARNING` / unset | logging |
-| `SUPPORTED_VERSIONS` | `0.35` | tested `kimi` minors |
+| `SUPPORTED_VERSIONS` | `0.35,0.39` | supported `kimi` minors (probed at `0.35.0`, `0.39.1`) |
 | `EXTRA_ARGS` | unset | **no safe passthrough exists** — any value is refused, see below |
 
 `MOONBRIDGE_EXTRA_ARGS` accepts nothing today, deliberately. Kimi exposes no config-override,

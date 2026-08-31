@@ -3,9 +3,9 @@
 Replaces the Codex-era contract suite: the two CLIs share no flags, no sandbox vocabulary,
 and no failure phrasings, so the old assertions described a contract that does not exist.
 
-Every failure string below is a real message captured from kimi-code 0.35.0 (see
-docs/kimi-help/0.35.0/), not an invented one — a classifier tuned to invented phrasings
-would pass its tests and misclassify in production.
+Every failure string below is a real message captured from a kimi-code release (0.35.0
+or 0.39.1 — see docs/kimi-help/<version>/), not an invented one — a classifier tuned to
+invented phrasings would pass its tests and misclassify in production.
 """
 
 from __future__ import annotations
@@ -69,7 +69,7 @@ def test_the_argv_bound_is_far_below_the_observed_crash_point():
 
 
 # --------------------------------------------------------------------------- #
-# Failure signatures — all strings captured from kimi-code 0.35.0
+# Failure signatures — all strings captured from kimi-code 0.35.0 or 0.39.1
 # --------------------------------------------------------------------------- #
 @pytest.mark.parametrize(
     "text",
@@ -106,8 +106,64 @@ def test_invalid_model_matches_the_captured_message():
     assert cli_contract.is_invalid_model(blob)
 
 
+def test_invalid_model_matches_the_unresolved_default_model_message():
+    """The second captured invalid-model phrasing, from kimi-code 0.39.1.
+
+    Emitted when config.toml's `default_model` names an alias with no `[models."..."]`
+    section: kimi fails while resolving the default, before any -m override applies.
+    Captured verbatim; the observed line is recorded in docs/kimi-help/0.39.1/
+    M0-FINDINGS.md. Without it the failure classified as neither invalid_model nor drift
+    and surfaced as a generic error.
+    """
+    blob = (
+        "error: failed to run prompt: model runpod/kimi-k3 "
+        "does not resolve to a configured provider"
+    )
+    assert cli_contract.is_invalid_model(blob)
+
+
+def test_unresolved_default_model_is_not_reported_as_contract_drift():
+    """It is the user's config, not an upstream change — misreporting it as drift would
+    tell the operator to file an upgrade bug instead of fixing default_model."""
+    blob = (
+        "error: failed to run prompt: model runpod/kimi-k3 "
+        "does not resolve to a configured provider"
+    )
+    assert not cli_contract.is_contract_drift(blob)
+
+
 def test_invalid_model_does_not_match_unrelated_model_talk():
     assert not cli_contract.is_invalid_model("the model is configured and working")
+
+
+def test_invalid_model_does_not_match_a_successful_provider_resolution():
+    """Guard the widened pattern: "resolve"/"provider" prose alone must not trip it."""
+    assert not cli_contract.is_invalid_model("model runpod/kimi-k3 resolved to provider runpod")
+
+
+@pytest.mark.parametrize(
+    "prose",
+    [
+        # Kimi's own transcript, discussing the classifier rather than failing on it.
+        "The classifier fires when the alias does not resolve to a configured provider.",
+        # This repo's own CHANGELOG line, which a consult over this workspace can echo.
+        "kimi emits it when config.toml's default_model does not resolve to a configured provider.",
+        "Q: what happens if a model does not resolve to a configured provider? A: it errors.",
+    ],
+)
+def test_invalid_model_does_not_match_mere_prose_about_the_failure(prose):
+    """The signature must need kimi's error PREFIX, not just the English clause.
+
+    `classify_failure` tests invalid_model FIRST, ahead of drift, auth, and rate limiting,
+    and it reads `run.stdout` and `last_message` — which carry the MODEL'S OWN text. An
+    unanchored clause therefore lets a run that merely discusses this failure mode outrank
+    the real cause: a genuine `cli_contract_changed` would be reported as invalid_model,
+    silencing the one signal this contract says must always be loud, and a rate-limit
+    would lose its `retry_after_ms`. Reviewing this very repository is enough to trigger
+    it — the phrase now appears in cli_contract.py, this file, CHANGELOG.md, and
+    M0-FINDINGS.md.
+    """
+    assert not cli_contract.is_invalid_model(prose)
 
 
 @pytest.mark.parametrize(
@@ -158,6 +214,11 @@ def test_parse_retry_after_distinguishes_zero_from_absent():
 # --------------------------------------------------------------------------- #
 def test_supported_versions_tracks_the_verified_release():
     assert (0, 35) in cli_contract.SUPPORTED_VERSIONS
+
+
+def test_supported_versions_includes_the_reverified_0_39_release():
+    """0.39.1 was re-verified probe-by-probe; captures in docs/kimi-help/0.39.1/."""
+    assert (0, 39) in cli_contract.SUPPORTED_VERSIONS
 
 
 def test_model_slug_pattern_accepts_a_real_alias():

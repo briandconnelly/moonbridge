@@ -344,6 +344,35 @@ def test_an_unknown_model_alias_is_the_callers_argument_not_drift():
     assert err.code == "invalid_model"
 
 
+def test_an_unresolvable_default_model_does_not_blame_the_model_argument():
+    """The two invalid-model causes need different repair guidance.
+
+    Captured on 0.39.1: this message fires while kimi resolves config.toml's
+    `default_model`, BEFORE any -m override applies — so it reaches the classifier on a
+    run whose `model` argument was perfectly valid. Blaming that argument sends the caller
+    into a repair loop: the generic hint says "omit model to use the configured
+    default_model", which is precisely the thing that is broken. The error must name
+    config.toml's default_model and must NOT pin the blame on the `model` field.
+    """
+    blob = (
+        "error: failed to run prompt: model runpod/kimi-k3 "
+        "does not resolve to a configured provider"
+    )
+    err = kimi.classify_failure(_run(stderr=blob))
+    assert err.code == "invalid_model"
+    assert "default_model" in err.message
+    # The caller's `model` argument may have been valid, so it must not be fingered.
+    assert err.details is None or err.details.field != "model"
+
+
+def test_an_unknown_alias_still_blames_the_model_argument():
+    """The other cause is unchanged: there the `model` argument really is at fault."""
+    blob = 'error: failed to run prompt: Model "nope" is not configured in config.toml.'
+    err = kimi.classify_failure(_run(stderr=blob))
+    assert err.code == "invalid_model"
+    assert err.details is not None and err.details.field == "model"
+
+
 def test_an_unknown_option_is_contract_drift():
     err = kimi.classify_failure(_run(stderr="error: unknown option '--output-format'"))
     assert err.code == "cli_contract_changed"

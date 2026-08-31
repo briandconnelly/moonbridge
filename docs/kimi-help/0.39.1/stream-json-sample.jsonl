@@ -1,0 +1,5 @@
+{"role":"meta","type":"system.version","version":"0.39.1"}
+{"role":"assistant","tool_calls":[{"type":"function","id":"Glob:0","function":{"name":"Glob","arguments":"{\"pattern\":\"*\"}"}}]}
+{"role":"tool","tool_call_id":"Glob:0","content":"No matches found"}
+{"role":"assistant","content":"DONE"}
+{"role":"meta","type":"session.resume_hint","session_id":"session_32d81e56-aae6-49b7-9898-3266d13f8eca","command":"kimi -r session_32d81e56-aae6-49b7-9898-3266d13f8eca","content":"To resume this session: kimi -r session_32d81e56-aae6-49b7-9898-3266d13f8eca"}
