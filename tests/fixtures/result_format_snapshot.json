@@ -1,5 +1,5 @@
 {
-  "result_format": 8,
+  "result_format": 9,
   "schemas": {
     "ConsultResult": {
       "$defs": {
@@ -284,7 +284,8 @@
                   "enum": [
                     "client",
                     "not_negotiated",
-                    "probe_failed"
+                    "probe_failed",
+                    "unsupported"
                   ],
                   "type": "string"
                 },
@@ -1077,7 +1078,8 @@
                   "enum": [
                     "client",
                     "not_negotiated",
-                    "probe_failed"
+                    "probe_failed",
+                    "unsupported"
                   ],
                   "type": "string"
                 },
@@ -2082,7 +2084,8 @@
                   "enum": [
                     "client",
                     "not_negotiated",
-                    "probe_failed"
+                    "probe_failed",
+                    "unsupported"
                   ],
                   "type": "string"
                 },
@@ -2943,7 +2946,8 @@
                   "enum": [
                     "client",
                     "not_negotiated",
-                    "probe_failed"
+                    "probe_failed",
+                    "unsupported"
                   ],
                   "type": "string"
                 },

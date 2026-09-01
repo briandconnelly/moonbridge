@@ -100,7 +100,7 @@ def _consult_meta() -> Meta:
     """
     return _meta(
         workspace_source="param",
-        roots_source="client",
+        roots_source="unsupported",
         model="a-model",
         reasoning_effort="high",
         # 0 on purpose: a POPULATED FALSY optional. `slim_meta` keys on `is None`, never
@@ -120,7 +120,7 @@ def _review_meta() -> Meta:
     """
     return _meta(
         workspace_source="param",
-        roots_source="client",
+        roots_source="unsupported",
         model="a-model",
         reasoning_effort="high",
         command_exit_code=0,
@@ -152,7 +152,7 @@ def _review_commit_truncated_meta() -> Meta:
     return _meta(
         workspace_source="cwd",
         workspace_warning=workspace_warning_for("cwd", "/repo"),
-        roots_source="not_negotiated",
+        roots_source="unsupported",
         model="a-model",
         reasoning_effort="high",
         command_exit_code=0,

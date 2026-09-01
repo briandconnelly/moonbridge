@@ -10,7 +10,7 @@ from moonbridge import manifest, server
 _FIXTURE = Path(__file__).parent / "fixtures" / "manifest_snapshot.json"
 
 # sha256 of the canonical manifest JSON; regenerate per the test failure message.
-EXPECTED_MANIFEST_HASH = "8858a64196bb0180abd940b037dff74830f5c6f418116e93c1982eb990777e9d"
+EXPECTED_MANIFEST_HASH = "d5451adcba740acc3e5d41141a875a73894468fc9c342940d80306d8f85c1956"
 
 
 def test_canonicalize_strips_only_fastmcp_meta():
@@ -90,6 +90,7 @@ async def test_fingerprint_covers_accounts_for_every_section():
         "resource_templates": {"resource_templates"},
         "prompts": {"prompts"},
         "initialize": {"initialize_response"},
+        "protocol_eras": {"protocol_eras"},
         "error_envelope": {"error_envelope_schema"},
         "result_meta": {"result_meta_schema"},
         "capabilities_result": {"capabilities_result_schema"},
@@ -166,7 +167,10 @@ async def test_manifest_drops_exactly_the_declared_server_info_fields():
     """Same widening guard for the initialize response: `serverInfo.version` is popped
     inline, so only equality against the live serverInfo catches a second pop (#337)."""
     m = await manifest.build_manifest()
-    async with Client(server.mcp) as client:
+    # mode="legacy": `initialize` exists only on the handshake era. A default
+    # (auto) client negotiates the sessionless 2026-07-28 era, where
+    # `initialize_result` is None — see ADR 0005.
+    async with Client(server.mcp, mode="legacy") as client:
         live_info = manifest._dump(client.initialize_result).get("serverInfo", {})
     dropped = set(live_info) - set(m["initialize"]["serverInfo"])
     assert dropped == {"version"}
@@ -299,3 +303,31 @@ async def test_manifest_matches_golden():
 
 async def test_manifest_hash_is_pinned():
     assert await manifest.manifest_hash() == EXPECTED_MANIFEST_HASH
+
+
+async def test_build_manifest_captures_both_protocol_eras():
+    """FastMCP 4 serves the legacy handshake and the sessionless modern era from one
+    server (ADR 0005). Both negotiated revisions are agent-visible surface, so the
+    manifest guards them — a silently dropped era moves the snapshot."""
+    m = await manifest.build_manifest()
+    eras = m["protocol_eras"]
+    assert eras["legacy"]["protocol_version"] == "2025-11-25"
+    assert eras["modern"]["protocol_version"] == "2026-07-28"
+    # The revision string alone would not guard the modern discovery surface: the modern
+    # era has no `initialize` response, so nothing else in the manifest covers what it
+    # advertises. Both eras carry their capabilities and instructions for that reason.
+    for era in eras.values():
+        assert era["capabilities"]["tools"], "tools capability missing"
+        assert era["instructions"], "server instructions missing"
+    # The two eras genuinely differ — `listChanged` is true on the handshake era and false
+    # on the sessionless one. A refactor that captured one era twice would pass every
+    # assertion above; this is what catches it.
+    assert eras["legacy"]["capabilities"] != eras["modern"]["capabilities"]
+
+
+async def test_build_manifest_initialize_is_the_legacy_handshake():
+    """`initialize` only exists on the handshake era. Capturing it means pinning the
+    manifest client to `mode="legacy"`; a default (auto) client negotiates the modern
+    era, where `initialize_result` is None and the block would vanish silently."""
+    m = await manifest.build_manifest()
+    assert m["initialize"]["protocolVersion"] == m["protocol_eras"]["legacy"]["protocol_version"]

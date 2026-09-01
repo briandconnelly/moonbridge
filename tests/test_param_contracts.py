@@ -229,7 +229,7 @@ def _wire_parameter_costs() -> dict[str, tuple[int, int, int]]:
     tools = asyncio.run(collect())
     seen: dict[str, tuple[int, int, int]] = {}
     for t in tools:
-        for name, prop in (t.inputSchema or {}).get("properties", {}).items():
+        for name, prop in (t.input_schema or {}).get("properties", {}).items():
             desc = prop.get("description") or ""
             count, _, total = seen.get(name, (0, 0, 0))
             wire = TestAuditTwoCompaction._serialized_bytes(desc)

@@ -129,7 +129,22 @@ from moonbridge.server import mcp
 # gained a `Spend:` label matching the sibling directive blocks, and the RateLimit schema
 # description dropped its Codex-provenance aside): 82,869 bytes (+3 B) — still within
 # budget, no further change.
-TOOLS_LIST_BYTE_BUDGET = 83_000
+# Measured 2026-08-31 (ADR 0005, the FastMCP 4 / MCP SDK v2 upgrade): `RootsSource` gained
+# the "unsupported" value, and that enum is duplicated into `meta.roots_source` on every
+# tool's outputSchema, so a 15-char addition lands ~14 times: 83,075 bytes (+206 B), 75 B
+# over. Budget raised to the next 500 above the measured value. The addition is not
+# compressible — narrowing the enum instead (dropping the three now-unemitted values) would
+# be a breaking change to a published value set, which is the more expensive trade.
+# Measured again 2026-09-01 (PR #12 review): the `meta.roots_source` description was rewritten
+# to define `unsupported` and mark the other three historical, and five tool descriptions that
+# still promised MCP roots could pick the working directory were corrected — both duplicated
+# across the same output schemas. Measured once more after a second review pass corrected the
+# `workspace_root` parameter description and the cwd-fallback warning text — both duplicated the
+# same way, and both still telling agents an MCP root could aim a call: 83,256 bytes. Still
+# within budget, no further raise. (The parameter description was deliberately kept close to its
+# original length: a longer one breached the fan-out ceiling its PARAMETER_CONTRACTS exemption
+# was granted at, which `test_fanout_exemptions_stay_within_their_pinned_ceiling` caught.)
+TOOLS_LIST_BYTE_BUDGET = 83_500
 
 # The measured tools/list size as of the last deliberate review above — NOT a second gate.
 # The budget assertion below is the only hard failure; this exists purely so the assertion's
@@ -141,7 +156,7 @@ TOOLS_LIST_BYTE_BUDGET = 83_000
 # history above is "still within budget, no further change" rows that grew the measured size
 # without touching the budget; the target must track every one of those too, or it silently
 # goes stale between the raises).
-TOOLS_LIST_BYTE_TARGET = 82_869
+TOOLS_LIST_BYTE_TARGET = 83_256
 
 
 def _budget_failure_message(measured: int) -> str:

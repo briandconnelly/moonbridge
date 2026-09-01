@@ -99,7 +99,14 @@ def _envelope_block(content: Any) -> dict[str, Any]:
 
 async def build_manifest() -> dict[str, Any]:
     """Assemble the normalized, canonical agent-visible surface manifest."""
-    async with Client(mcp) as client:
+    # mode="legacy" is explicit and load-bearing (ADR 0005). FastMCP 4 defaults a Client
+    # to mode="auto", which against a FastMCP server negotiates the sessionless
+    # 2026-07-28 era — an era with no `initialize` handshake at all, where
+    # `client.initialize_result` is None. Letting that default stand would drop the whole
+    # initialize block (serverInfo/protocolVersion/capabilities) from the guarded surface
+    # without failing anything. Pin the era instead, and capture the modern one separately
+    # below so the dual-era support is itself guarded.
+    async with Client(mcp, mode="legacy") as client:
         tools = [_canonicalize(_dump(t)) for t in await client.list_tools()]
         resources = [_canonicalize(_dump(r)) for r in await client.list_resources()]
         templates = [_canonicalize(_dump(t)) for t in await client.list_resource_templates()]
@@ -135,7 +142,31 @@ async def build_manifest() -> dict[str, Any]:
         k: v for k, v in kimi_capabilities(detail="full").items() if k not in _CAPABILITIES_EXCLUDE
     }
 
+    # Each era this server serves, captured from live connections rather than hardcoded, so
+    # an SDK that silently stops serving an era — or changes what it advertises on one —
+    # moves the snapshot instead of leaving a stale constant behind.
+    #
+    # The revision string alone is NOT enough (Copilot review, PR #12). The two eras
+    # advertise DIFFERENT capabilities — verified: `listChanged` is true on the handshake
+    # era and false on the modern one — and the modern era has no `initialize` response, so
+    # the `initialize` section above covers only the legacy side. Capturing capabilities and
+    # instructions per era is what makes the `protocol_eras` coverage token honest: without
+    # it, a change to the sessionless `server/discover` surface moved nothing.
+    #
+    # serverInfo is deliberately excluded here: it is already guarded (minus its
+    # release-variable `version`) by the `initialize` section, and is era-independent.
+    async def _era(mode: str) -> dict[str, Any]:
+        async with Client(mcp, mode=mode) as client:
+            return {
+                "protocol_version": client.protocol_version,
+                "capabilities": _canonicalize(_dump(client.server_capabilities)),
+                "instructions": client.instructions,
+            }
+
+    protocol_eras = {"legacy": await _era("legacy"), "modern": await _era("auto")}
+
     return {
+        "protocol_eras": protocol_eras,
         "tools": sorted(tools, key=lambda t: t["name"]),
         "resources": sorted(resources, key=lambda r: r["uri"]),
         "resource_templates": sorted(templates, key=lambda t: t["uriTemplate"]),

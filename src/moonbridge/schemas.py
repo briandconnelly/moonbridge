@@ -12,6 +12,14 @@ from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, field_validator,
 
 from moonbridge import __version__
 
+# Every revision the installed SDK negotiates, read from the SDK rather than hardcoded so
+# an SDK upgrade that adds or drops one moves the manifest snapshot instead of leaving a
+# stale literal behind. Falls back to the known set if the SDK moves the constant.
+try:
+    from mcp_types.version import SUPPORTED_PROTOCOL_VERSIONS as _SUPPORTED_PROTOCOL_VERSIONS
+except ImportError:  # pragma: no cover - defensive: SDK layout change
+    _SUPPORTED_PROTOCOL_VERSIONS = ("2025-11-25", "2026-07-28")
+
 # The agent-visible surface the FINGERPRINT covers, as granular machine-readable
 # identifiers. This tuple is the single source of truth: CapabilitiesResult.fingerprint_covers
 # derives from it (audit F6, #178), so a client can reason about the fingerprint's
@@ -36,8 +44,12 @@ FINGERPRINT_COVERS: tuple[str, ...] = (
     "prompts",  # prompt wire shapes (name/description/arguments)
     # Server-level surface
     # serverInfo/protocolVersion/advertised capabilities/instructions — minus the
-    # release-variable `serverInfo.version` (#337).
+    # release-variable `serverInfo.version` (#337). Handshake-era only: `initialize` does
+    # not exist on the sessionless era (ADR 0005), which `protocol_eras` covers instead.
     "initialize_response",
+    # the set of MCP protocol revisions the server negotiates (ADR 0005). Dropping an era
+    # changes what a client can connect with, so it is contract, not release identity.
+    "protocol_eras",
     "error_envelope_schema",  # kimi://error-envelope content
     "result_meta_schema",  # kimi://result-meta content
     "capabilities_result_schema",  # kimi://capabilities-result content (#242)
@@ -68,7 +80,7 @@ _FINGERPRINT_COVERS_DESC = (
 # this and regenerate the fixture in the same commit. It is an acknowledgment guard — it surfaces
 # the drift, it does not mechanically force the integer bump (the snapshot and this string are
 # independently editable).
-FINGERPRINT = "moonbridge/0.1/schema-5"
+FINGERPRINT = "moonbridge/0.1/schema-6"
 
 # The persisted result-format version, stamped into each job record's generic metadata
 # (`extra.result_format`) at spawn so replay can tell a cross-release payload from a corrupt
@@ -114,7 +126,22 @@ FINGERPRINT = "moonbridge/0.1/schema-5"
 # non-null, non-empty RedactionSummary, so the `serialized` view's `review_success` entry
 # gains the key WITH a populated value — a real shape addition to what a replaying reader
 # must be able to parse, not merely a schema-only change.
-RESULT_FORMAT: int = 8
+# ADR 0005 bumped 8->9: `RootsSource` gained the value "unsupported", and this release
+# stamps it on EVERY new record (the roots probe is gone, so it is now the only value the
+# server emits). The rule above names "a new Literal/enum value" explicitly, and this is
+# the case it was written for: a format-8 reader's closed Literal
+# ["client","not_negotiated","probe_failed"] REJECTS a record carrying "unsupported", so
+# without a bump such a record would be misreported as corruption (internal_error) instead
+# of a cross-release payload (job_result_incompatible, permanent). Widening runs the safe
+# way round in the other direction — this release's reader accepts every format-8 value,
+# so already-stored records still replay.
+#
+# Note the `serialized` view does NOT move here, unlike #433: the representative envelopes
+# leave `roots_source` null, so only the `schemas` view drifts. That asymmetry did NOT
+# bump for #185, and the difference is that #185's fields could never be persisted at all,
+# while this value is persisted on every record — the schema view is what a replaying
+# reader validates against, and it is the thing that changed.
+RESULT_FORMAT: int = 9
 
 
 # The release that produced this envelope. Beside `fingerprint` on every result surface:
@@ -223,13 +250,22 @@ Detail = Literal["summary", "full"]
 # omitting it needs no schema change — letting a resource-blind client fetch a schema, or
 # just revalidate `fingerprint`, without re-paying for the inventory.
 CapabilitiesDetail = Literal["summary", "full", "contracts"]
-# Which of three states the MCP-roots probe saw (F8, #contract-checklist §1/§2):
+# Which state the MCP-roots probe saw (F8, #contract-checklist §1/§2). Defined once here
+# and imported into server.py so the two modules cannot drift on the value set.
+#
+# "unsupported" is the ONLY value this server emits as of the FastMCP 4 upgrade (ADR 0005):
+# the MCP SDK v2 removed the server-to-client `roots/list` request on every protocol era,
+# so there is no probe left to run. Pass `workspace_root` — the durable, first-choice path
+# on every tool that resolves a working directory, and the migration target the 2026-07-28
+# spec itself names for the deprecated roots feature (SEP-2577).
+#
+# The other three values are RETAINED, not emitted. Removing them would narrow a value set
+# a client may already branch on (breaking, per AGENTS.md → Versioning); keeping them costs
+# nothing and lets a client that stored an older envelope still validate it:
 # "client" — the client advertised roots and list_roots() returned (possibly empty);
-# "not_negotiated" — this client never advertised the roots capability (pass
-# workspace_root instead); "probe_failed" — roots were advertised but the call
-# errored this turn (transient; retrying may help). Defined once here and imported
-# into server.py so the two modules cannot drift on the value set.
-RootsSource = Literal["client", "not_negotiated", "probe_failed"]
+# "not_negotiated" — this client never advertised the roots capability;
+# "probe_failed" — roots were advertised but the call errored that turn.
+RootsSource = Literal["client", "not_negotiated", "probe_failed", "unsupported"]
 # Lifecycle states for a background job. Terminal: done|failed|cancelled|timeout.
 # (TTL-expired records are deleted and reported as job_not_found, not a state.)
 JobState = Literal["running", "done", "failed", "cancelled", "timeout"]
@@ -263,8 +299,8 @@ def workspace_warning_for(source: str | None, cwd: str) -> str | None:
     if source == "cwd":
         return (
             f"workspace resolved from the server's own cwd ({cwd}); pass "
-            "workspace_root (or configure an MCP root) to be sure the task "
-            "targets the intended repository"
+            "workspace_root to be sure the task targets the intended repository "
+            "(MCP roots are unavailable — the SDK removed the roots request)"
         )
     return None
 
@@ -618,15 +654,18 @@ class Meta(BaseModel):
     roots_source: RootsSource | None = Field(
         default=None,
         description=(
-            "Which of three states the MCP-roots probe saw: 'client' (the client advertised "
-            "the roots capability and the probe returned, possibly an empty list), "
-            "'not_negotiated' (this client never advertised the roots capability — pass "
-            "workspace_root instead), or 'probe_failed' (roots were advertised but the call "
-            "errored this turn — retrying may help). Distinguishes a client limitation from "
-            "a transient failure, which a bare empty list could not. It reports the PROBE, "
-            "not where the workspace came from — workspace_source answers that, and 'client' "
-            "coexists with workspace_source 'param' (an explicit workspace_root wins over "
-            "roots) or 'cwd' (the probe returned no usable root). WHEN PRESENT, which run it "
+            "What the MCP-roots probe saw. ALWAYS 'unsupported' on this server: the MCP SDK "
+            "removed the server-to-client roots/list request on every protocol era, so no "
+            "probe runs and client roots can no longer supply a working directory — pass "
+            "workspace_root, or the call falls back to the server cwd. The other three values "
+            "are HISTORICAL: retained so an envelope stored by an earlier release still "
+            "validates, never emitted now — 'client' (the client advertised the roots "
+            "capability and the probe returned, possibly an empty list), 'not_negotiated' "
+            "(this client never advertised the capability), 'probe_failed' (roots were "
+            "advertised but the call errored that turn). It reports the PROBE, "
+            "not where the workspace came from — workspace_source answers that, and is now "
+            "'param' (you passed workspace_root) or 'cwd' (you did not); its 'roots' value is "
+            "likewise unreachable. WHEN PRESENT, which run it "
             "describes depends on the envelope: a DELIVERED kimi_consult / "
             "kimi_review_changes / kimi_delegate result — whether returned synchronously "
             "or fetched later via kimi_job_result / kimi_job_consume_result — reports the "
@@ -1249,23 +1288,42 @@ class CapabilitiesResult(BaseModel):
     )
     # The MCP protocol revision this server's wire shapes are written against — a
     # declared TARGET, not the per-session negotiated value (#423 Kimi review): the
-    # installed SDK echoes back whatever older mutually-supported revision a client
-    # requests, so a given session's `initialize.protocolVersion` can be earlier than
-    # this field (see ADR 0004 and test_protocol_revision_matches_installed_sdk_target,
-    # which pins the target to the installed SDK's own default/fallback revision).
-    # Kept as a plain `str`, not a `Literal`, because a future revision bump changes the
-    # value without narrowing the type.
+    # installed SDK negotiates per connection, so a given session's negotiated revision
+    # can be earlier than this field (see ADR 0005 and
+    # test_protocol_revision_matches_installed_sdk_target, which pins the target to the
+    # installed SDK's own newest known revision). Kept as a plain `str`, not a `Literal`,
+    # because a future revision bump changes the value without narrowing the type.
+    #
+    # Moved 2025-11-25 -> 2026-07-28 with the FastMCP 4 / MCP SDK v2 upgrade, which serves
+    # BOTH eras from one server (ADR 0005). The value tracks the newest revision served;
+    # `protocol_eras_served` below carries the full set, because "the target" alone can no
+    # longer tell a client whether the handshake era is still reachable.
     protocol_revision: str = Field(
-        default="2025-11-25",
+        default="2026-07-28",
         description=(
-            "The MCP protocol revision this server's wire shapes are written against "
-            "(the target). The installed SDK negotiates per session: a client "
-            "requesting an older mutually-supported revision (e.g. 2025-06-18) gets "
-            "that version back in `initialize.protocolVersion`, so a given session's "
-            "negotiated value can be earlier than this field. This field states the "
-            "target, not the per-session negotiation. The 2026-07-28 migration plan "
-            "for this target's deprecated features is recorded in ADR 0004 "
-            "(docs/adr/0004-mcp-2026-07-28-migration.md)."
+            "The newest MCP protocol revision this server serves (the target its wire "
+            "shapes are written against). The installed SDK negotiates per connection "
+            "and this server serves multiple eras — see `protocol_eras_served` for the "
+            "full set — so a given session's negotiated revision can be earlier than "
+            "this field. This field states the target, not the per-session negotiation. "
+            "The migration that moved this from 2025-11-25 is recorded in ADR 0005 "
+            "(docs/adr/0005-fastmcp-4-and-mcp-sdk-v2.md)."
+        ),
+    )
+    # Additive companion to `protocol_revision` (ADR 0005). Before FastMCP 4 this server
+    # spoke one era, so a single target string said everything; now it serves the
+    # sessionless modern era AND the initialize handshake, and a client that must know
+    # whether the handshake is reachable (because it depends on session-era behavior)
+    # could otherwise only find out by attempting a connection.
+    protocol_eras_served: list[str] = Field(
+        default_factory=lambda: list(_SUPPORTED_PROTOCOL_VERSIONS),
+        description=(
+            "Every MCP protocol revision this server negotiates, oldest first. The "
+            "handshake-era revisions establish a session via `initialize` and the server "
+            "echoes back whichever of them a client requests; the newest revision is "
+            "sessionless and conveys version, identity, and capabilities as per-request "
+            "metadata. Roots are unavailable on every one of them — pass `workspace_root` "
+            "(see `meta.roots_source`)."
         ),
     )
     # The server's documented reading of its own `readOnlyHint` tool annotation (#426):
@@ -1296,14 +1354,18 @@ class CapabilitiesResult(BaseModel):
     # unknown/disabled URI returns a JSON-RPC error whose `error.data` now carries the
     # §6 ErrorInfo shape (code/message/temporary/retry_after_ms/repair — the `error`
     # object of kimi://error-envelope), no longer a bare null. `error.code` is the MCP
-    # numeric -32002 (resource not found) or -32603 (read failure); the symbolic string
+    # numeric not-found code for the negotiated era (-32002 handshake / -32602 modern, see
+    # server._resource_not_found_code) or -32603 (read failure); the symbolic string
     # code lives in `error.data.code` (e.g. resource_not_found). resource_uri/request_id
     # (audit F6, #185) add correlation: the tool carrier already has request_id on
     # `meta`, so those two are populated only here, never on the tool path.
     resource_error_carrier: str = (
         "JSON-RPC error; the §6 ErrorInfo envelope (code/message/temporary/"
-        "retry_after_ms/repair/resource_uri/request_id) is in error.data, and error.code "
-        "is the MCP numeric -32002 (not found) or -32603 (read failure). Note: this "
+        "retry_after_ms/repair/resource_uri/request_id) is in error.data. error.code is "
+        "the MCP numeric for not-found — which is ERA-DEPENDENT: -32002 on the handshake "
+        "era, -32602 on 2026-07-28, which forbids the old code — or -32603 (read "
+        "failure) on both. Branch on error.data.code ('resource_not_found'), not the "
+        "numeric, to stay era-agnostic. Note: this "
         "server keeps `code`/`message` rather than the machine_code/human_message "
         "spelling some §6 profiles use — nesting inside `data` already avoids shadowing "
         "the native JSON-RPC keys."

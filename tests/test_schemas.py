@@ -515,10 +515,18 @@ def test_loosened_schemas_stay_under_byte_budget():
     Measured again (#426): `annotations_reading` added a second described `str` field
     to `CapabilitiesResult`, stripped the same way — CAPABILITIES_SCHEMA moved
     2006 -> 2046 B, still under the 2100 B cap (no raise needed this time).
-    STATUS_SCHEMA remains unaffected (1659 B, unchanged)."""
+    STATUS_SCHEMA remains unaffected (1659 B, unchanged).
+
+    Budget raised 2100 -> 2200 B (ADR 0005): `protocol_eras_served` added a described
+    `list[str]` field to `CapabilitiesResult`. Its description is stripped like the two
+    above, but an array property carries an `items` subschema the bare string fields do
+    not, so CAPABILITIES_SCHEMA moved 2046 -> 2110 B — 10 B over the prior cap. Raised
+    deliberately rather than by dropping the field: the value is what tells a client
+    whether the handshake era is still reachable. STATUS_SCHEMA remains unaffected
+    (1659 B, unchanged)."""
     for name, (sch, _) in _OPAQUE_FIELD_SCHEMAS.items():
         size = len(json.dumps(sch, separators=(",", ":")))
-        assert size < 2100, f"{name} is {size} B, over the 2100 B budget"
+        assert size < 2200, f"{name} is {size} B, over the 2200 B budget"
 
 
 def test_result_meta_schema_is_full_meta_contract():
@@ -991,7 +999,7 @@ def test_async_lifecycle_advertises_activity_without_touching_progress_support()
 
 
 def test_fingerprint_is_pinned():
-    assert FINGERPRINT == "moonbridge/0.1/schema-5"
+    assert FINGERPRINT == "moonbridge/0.1/schema-6"
 
 
 def test_fingerprint_covers_is_a_nonempty_stable_tuple():
