@@ -91,6 +91,14 @@ the model's own prose. Unanchored, a run that merely discussed this failure coul
 genuine contract drift, which must always fail loudly. A false negative here is only the
 generic error this failure already produced; a false positive silences drift.
 
+> **Update (2026-09-01, #11):** `kimi.classify_failure` no longer tests invalid_model first;
+> it follows pontonier's shared order (drift → auth → rate limit → invalid model), so an
+> unanchored match could no longer outrank drift. The anchor stays: it still keeps model
+> prose that discusses this failure from being reported as `invalid_model` instead of a
+> generic `nonzero_exit`. The "trips the drift patterns" rationale for the old order was
+> checked against both captured messages here and on 0.35.0 — neither matches a drift
+> pattern.
+
 The two causes also carry different repair guidance. They share the `invalid_model` code,
 but an unresolvable `default_model` reaches the classifier even when the caller's `model`
 argument was valid, so the generic hint ("omit model to use the configured default_model")

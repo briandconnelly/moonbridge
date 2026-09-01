@@ -154,14 +154,14 @@ def test_invalid_model_does_not_match_a_successful_provider_resolution():
 def test_invalid_model_does_not_match_mere_prose_about_the_failure(prose):
     """The signature must need kimi's error PREFIX, not just the English clause.
 
-    `classify_failure` tests invalid_model FIRST, ahead of drift, auth, and rate limiting,
-    and it reads `run.stdout` and `last_message` — which carry the MODEL'S OWN text. An
-    unanchored clause therefore lets a run that merely discusses this failure mode outrank
-    the real cause: a genuine `cli_contract_changed` would be reported as invalid_model,
-    silencing the one signal this contract says must always be loud, and a rate-limit
-    would lose its `retry_after_ms`. Reviewing this very repository is enough to trigger
-    it — the phrase now appears in cli_contract.py, this file, CHANGELOG.md, and
-    M0-FINDINGS.md.
+    `classify_failure` reads `run.stdout` and `last_message` — which carry the MODEL'S
+    OWN text. An unanchored clause therefore lets a run that merely discusses this failure
+    mode be reported as invalid_model, blaming a model argument that was fine, when the
+    honest answer is the bounded `nonzero_exit`. Reviewing this very repository is enough
+    to trigger it — the phrase now appears in cli_contract.py, this file, CHANGELOG.md,
+    and M0-FINDINGS.md. (invalid_model is tested LAST since #11, per pontonier's shared
+    order, so this false positive can no longer outrank drift, auth, or a rate limit;
+    the nonzero_exit case is what the anchor still guards.)
     """
     assert not cli_contract.is_invalid_model(prose)
 

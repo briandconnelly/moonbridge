@@ -20,6 +20,16 @@ All notable changes to this project are documented here, following
   every extension the server legitimately advertises rather than only the unimplemented
   `io.modelcontextprotocol/ui` one (#424). Found by the upgrade; regression test verified to fail
   against the pre-fix code.
+- `classify_failure` now tests failure signatures in pontonier's shared precedence order
+  (drift -> auth -> rate limit -> invalid model), which the library documents as the part every
+  bridge must agree on (#11). It previously tested `invalid_model` first and `auth` ahead of
+  drift, so a run whose output carried both a contract-drift message and an invalid-model or
+  auth message classified as `invalid_model`/`kimi_auth_required` here and `cli_contract_changed`
+  under the shared classifier — masking the one signal that must stay loud. The old order cited
+  an unknown-alias message that "also trips the drift patterns"; verified against the 0.35.0 and
+  0.39.1 captures, it does not, so no captured kimi message changes classification. A parity
+  test now holds the classifier to the shared order on stderr input. No error code, field, or
+  documented meaning changes, so `FINGERPRINT` is unchanged.
 
 ### Changed
 

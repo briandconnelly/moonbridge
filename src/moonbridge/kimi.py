@@ -491,12 +491,19 @@ def classify_failure(
 ) -> ErrorInfo:
     """Classify a non-success `kimi -p` run into a recoverable ErrorInfo.
 
-    Ordering is deliberate and mirrors the Codex adapter: drift is checked BEFORE rate
-    limiting so a genuine contract change is never masked as a retryable transient.
+    The precedence order is pontonier's shared one, which its classifier documents as the
+    part every bridge must agree on: drift -> auth -> rate limit -> invalid model. Drift
+    first, so a genuine contract change is never masked as a retryable transient or as a
+    caller mistake. An earlier version tested invalid_model first, citing an unknown `-m`
+    alias whose message "also trips the drift patterns"; it does not — neither captured
+    invalid-model message matches any drift pattern (checked against the 0.35.0 and 0.39.1
+    captures), so the shared order costs nothing on real kimi output (#11).
+    `tests/test_backend.py` holds this function to parity with `pontonier.backend.classify`
+    on stderr-only input.
 
-    The invalid-model branch sits ahead of generic drift because kimi reports an unknown
-    -m alias with a message that also trips the drift patterns, and that failure is the
-    caller's argument, not an upstream change.
+    This function searches wider than the shared classifier — `stdout`, `last_message`
+    and the stream-json error event as well as `stderr` — which is a separate, unresolved
+    divergence (#11); the order is the part reconciled here.
 
     There is deliberately NO backend reasoning-effort branch here, unlike the Codex
     adapter. Verified on kimi-code 0.35.0: kimi silently IGNORES an unrecognized
@@ -514,19 +521,13 @@ def classify_failure(
     # effort rejection to classify.
     _ = reasoning_effort
     event_error = normalize.extract_error_message(events) if events else None
-    if cli_contract.is_invalid_model(run.stderr, run.stdout, last_message, event_error):
-        if cli_contract.is_unresolved_default_model(
-            run.stderr, run.stdout, last_message, event_error
-        ):
-            return _unresolved_default_model_error()
-        return _invalid_model_error()
-    if cli_contract.is_auth_failure(run.stderr, run.stdout, last_message, event_error):
-        return _auth_error()
     if cli_contract.is_contract_drift(run.stderr, run.stdout, event_error):
         matched = _extra_args_drift_match(extra_args, run.stderr, run.stdout, event_error)
         if matched is not None:
             return _extra_args_rejected_error(matched)
         return contract_changed_error()
+    if cli_contract.is_auth_failure(run.stderr, run.stdout, last_message, event_error):
+        return _auth_error()
     if cli_contract.is_rate_limited(run.stderr, run.stdout, last_message, event_error):
         retry_after = cli_contract.parse_retry_after_ms(
             run.stderr, run.stdout, last_message, event_error
@@ -536,6 +537,12 @@ def classify_failure(
         if retry_after is None:
             retry_after = cli_contract.RATE_LIMIT_DEFAULT_BACKOFF_MS
         return _rate_limit_error(retry_after)
+    if cli_contract.is_invalid_model(run.stderr, run.stdout, last_message, event_error):
+        if cli_contract.is_unresolved_default_model(
+            run.stderr, run.stdout, last_message, event_error
+        ):
+            return _unresolved_default_model_error()
+        return _invalid_model_error()
     # Sanitize (or redact) the full text BEFORE truncating: a secret or worktree path
     # straddling the cut would otherwise lose the tail the patterns need, leaking a prefix.
     raw = (event_error or run.stderr or run.stdout).strip()
