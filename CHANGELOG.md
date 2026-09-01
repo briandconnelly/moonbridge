@@ -8,9 +8,10 @@ All notable changes to this project are documented here, following
 ## [0.3.0] - 2026-09-01
 
 Upgrading is mandatory for anyone on 0.2.0: that release cannot import (see the first entry under
-Fixed). This release is flagged breaking for three behavior changes that no schema diff surfaces —
-they are marked **Breaking** below. `FINGERPRINT` moves `schema-5` -> `schema-6`; `RESULT_FORMAT`
-moves `8` -> `9`.
+Fixed). Four changes are marked **Breaking** below. Three of them are behavioral, so no schema diff
+surfaces them — read those before upgrading; the fourth (`meta.roots_source`) does show up in a
+diff, as an added enum value. `FINGERPRINT` moves `schema-5` -> `schema-6`; `RESULT_FORMAT` moves
+`8` -> `9`.
 
 ### Added
 
