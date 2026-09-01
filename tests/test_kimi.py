@@ -426,6 +426,47 @@ def test_drift_is_checked_before_invalid_model():
     assert kimi.classify_failure(_run(stderr=both)).code == "cli_contract_changed"
 
 
+@pytest.mark.parametrize(
+    "stderr",
+    [
+        # Each captured signature alone.
+        "error: unknown option '--output-format'",
+        "401 unauthorized",
+        "429 too many requests",
+        'error: failed to run prompt: Model "zap" is not configured in config.toml.',
+        "error: failed to run prompt: model x/y does not resolve to a configured provider",
+        "something went sideways",
+        # Every adjacent pair in the shared order, so a swap of any two branches shows.
+        "error: unknown option '--x'\n401 unauthorized",
+        "401 unauthorized\n429 too many requests",
+        '429 too many requests\nModel "zap" is not configured in config.toml',
+        # The pair #11 found reversed.
+        "error: unknown option '--x'\nModel \"zap\" is not configured in config.toml",
+    ],
+)
+def test_classify_failure_agrees_with_the_shared_precedence_order(stderr):
+    """pontonier documents its precedence order as the part every bridge must agree on.
+
+    This bridge publishes its signatures into `PONTONIER_CONTRACT.failure_signatures`,
+    so the shared classifier and `kimi.classify_failure` must give the same code for the
+    same stderr; otherwise a caller reaching one instead of the other silently changes
+    classification. The conformance kit has no classification checks, so this is the
+    guard (#11). It calls the production classifier DIRECTLY, not through `KimiBackend`:
+    if the adapter ever delegates to the shared classifier instead, a test through the
+    adapter would compare the shared classifier with itself and stop guarding anything.
+    Restricted to stderr: the searched-text difference is out of scope here.
+    """
+    from pontonier.backend import classify as shared_classify
+    from pontonier.backend.protocol import RunOutcome, RunRequest
+
+    run = _run(stderr=stderr)
+    request = RunRequest(kind="consult", prompt="q", cwd=".", timeout_seconds=10)
+    shared = shared_classify.classify(
+        cli_contract.PONTONIER_CONTRACT, RunOutcome(run=run), request, detail=""
+    )
+    assert kimi.classify_failure(run).code == shared.code
+
+
 def test_an_unrecognized_failure_is_a_bounded_nonzero_exit():
     err = kimi.classify_failure(_run(stderr="something went sideways", exit_code=3))
     assert err.code == "nonzero_exit"

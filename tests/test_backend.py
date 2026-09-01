@@ -253,41 +253,6 @@ def test_classify_failure_delegates_to_production_classifier():
     assert adapter_result.code == direct.code == "invalid_model"
 
 
-@pytest.mark.parametrize(
-    "stderr",
-    [
-        # Each captured signature alone.
-        "error: unknown option '--output-format'",
-        "401 unauthorized",
-        "429 too many requests",
-        'error: failed to run prompt: Model "zap" is not configured in config.toml.',
-        "error: failed to run prompt: model x/y does not resolve to a configured provider",
-        "something went sideways",
-        # Every adjacent pair in the shared order, so a swap of any two branches shows.
-        "error: unknown option '--x'\n401 unauthorized",
-        "401 unauthorized\n429 too many requests",
-        '429 too many requests\nModel "zap" is not configured in config.toml',
-        # The pair #11 found reversed.
-        "error: unknown option '--x'\nModel \"zap\" is not configured in config.toml",
-    ],
-)
-def test_classify_failure_agrees_with_the_shared_precedence_order(stderr):
-    """pontonier documents its precedence order as the part every bridge must agree on.
-
-    This bridge publishes its signatures into `PONTONIER_CONTRACT.failure_signatures`,
-    so the shared classifier and `kimi.classify_failure` must give the same code for the
-    same stderr; otherwise a caller reaching one instead of the other silently changes
-    classification. The conformance kit has no classification checks, so this is the
-    guard (#11). Restricted to stderr: the searched-text difference is out of scope here.
-    """
-    from pontonier.backend import classify as shared_classify
-
-    request = RunRequest(kind="consult", prompt="q", cwd=".", timeout_seconds=10)
-    outcome = _failed(stderr)
-    shared = shared_classify.classify(PONTONIER_CONTRACT, outcome, request, detail="")
-    assert BACKEND.classify_failure(outcome, request).code == shared.code
-
-
 def test_finalize_prefers_answer_file_over_stream():
     request = RunRequest(kind="delegate", prompt="q", cwd=".", timeout_seconds=10)
     events = '{"role":"assistant","content":"stream answer"}\n'
