@@ -129,7 +129,13 @@ from moonbridge.server import mcp
 # gained a `Spend:` label matching the sibling directive blocks, and the RateLimit schema
 # description dropped its Codex-provenance aside): 82,869 bytes (+3 B) — still within
 # budget, no further change.
-TOOLS_LIST_BYTE_BUDGET = 83_000
+# Measured 2026-08-31 (ADR 0005, the FastMCP 4 / MCP SDK v2 upgrade): `RootsSource` gained
+# the "unsupported" value, and that enum is duplicated into `meta.roots_source` on every
+# tool's outputSchema, so a 15-char addition lands ~14 times: 83,075 bytes (+206 B), 75 B
+# over. Budget raised to the next 500 above the measured value. The addition is not
+# compressible — narrowing the enum instead (dropping the three now-unemitted values) would
+# be a breaking change to a published value set, which is the more expensive trade.
+TOOLS_LIST_BYTE_BUDGET = 83_500
 
 # The measured tools/list size as of the last deliberate review above — NOT a second gate.
 # The budget assertion below is the only hard failure; this exists purely so the assertion's

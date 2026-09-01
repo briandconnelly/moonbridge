@@ -5,7 +5,70 @@ All notable changes to this project are documented here, following
 
 ## [Unreleased]
 
+### Fixed
+
+- **Every install was broken.** `pyproject.toml` declared `fastmcp>=3.4` with no upper bound, and
+  `.mcp.json` installs this plugin with `uvx --from git+<remote>@v<version>`, which resolves
+  dependencies fresh and does not read `uv.lock`. When fastmcp 4.0.0 published, every user's install
+  picked it up and the server failed at import — `ImportError: cannot import name 'McpError' from
+  'mcp'` — while CI stayed green against the locked fastmcp 3.4.7. The dependency is now
+  `fastmcp>=4,<5`; the upper bound turns the next major from a production break into a resolution
+  failure at upgrade time. **This fix only reaches users on release**, because `.mcp.json` pins a git
+  tag: the currently pinned tag does not import.
+- The `initialize` capability seam read `extensions` off `model_extra`, where MCP SDK v2 makes it a
+  declared field. The lookup found nothing and nulled the whole key, which would have suppressed
+  every extension the server legitimately advertises rather than only the unimplemented
+  `io.modelcontextprotocol/ui` one (#424). Found by the upgrade; regression test verified to fail
+  against the pre-fix code.
+
 ### Changed
+
+- **FastMCP 3.4 -> 4.0, MCP SDK 1.29 -> 2.1** (ADR 0005, superseding ADR 0004, whose own revisit
+  trigger this was). The server now serves both protocol eras — the 2025-11-25 handshake and the
+  sessionless 2026-07-28 — because FastMCP 4 negotiates per connection. Agent-visible consequences:
+  - **Breaking:** a call that omits `workspace_root` now resolves somewhere else. MCP SDK v2
+    removed `ctx.list_roots()` on every era (verified, not inferred: `hasattr(Context,
+    "list_roots")` is False under both `mode="legacy"` and `mode="auto"`), so no roots probe runs
+    and the client's roots can no longer supply a workspace. Such a call falls back to the
+    server's own launch directory with `meta.workspace_warning`. A caller that relied on MCP roots
+    to aim work at a repository will silently target the wrong directory — **pass
+    `workspace_root`**. This is a behavior change, not a schema change, so no schema guard catches
+    it for you.
+  - **Breaking:** `meta.roots_source` is now always `unsupported`, a value no existing client has
+    seen. Code branching on `client`/`not_negotiated`/`probe_failed` falls through every arm.
+    `unsupported` was ADDED to `RootsSource` rather than replacing those three — they are retained
+    but never emitted, so a stored envelope still validates against the published value set.
+  - `workspace_source == "roots"`, the `workspace_outside_roots` error code, and its
+    `candidate_roots` detail are still advertised but unreachable, for the same reason. Retiring
+    them would be breaking and is deliberately deferred.
+  - **Breaking:** resource-read not-found is era-dependent. `-32002` on the handshake era, but
+    `-32602` on 2026-07-28, which forbids the old code — and a default FastMCP 4 client negotiates
+    that era, so a client matching the numeric `-32002` stops matching. Branch on the symbolic
+    `error.data.code` (`"resource_not_found"`) instead. `resource_error_carrier` documents the
+    split.
+  - `protocol_revision` moves `2025-11-25` -> `2026-07-28` (the newest revision served), and the new
+    `protocol_eras_served` lists every era negotiated — the target alone can no longer tell a client
+    whether the handshake era is reachable.
+  - The advertised `initialize` capabilities lost `experimental: {}`, an SDK v2 change to a
+    capability this server never implemented.
+  - `FINGERPRINT` moves `schema-5` -> `schema-6`. Every schema-level change is itself additive
+    (`protocol_eras_served`, the `unsupported` enum value) or a value change to a field whose
+    documented meaning is unchanged (`protocol_revision`) — the release is flagged breaking for the
+    three behavioral changes marked above, which no schema diff would have surfaced. Pre-1.0, a
+    breaking change is a minor bump, not a major.
+  - `RESULT_FORMAT` moves `8` -> `9`. A format-8 reader's closed `RootsSource` Literal rejects a
+    record carrying `unsupported`, which this release stamps on every record; without the bump such
+    a record would be misreported as corruption rather than a cross-release payload.
+- The manifest now guards both protocol eras under a new `protocol_eras` section (with a matching
+  `FINGERPRINT_COVERS` token), captured from live handshakes rather than hardcoded. Its client is
+  pinned to `mode="legacy"`, because a default client negotiates the sessionless era where
+  `initialize_result` is `None` and the whole `initialize` block would have vanished silently.
+- FastMCP deprecation warnings are errors under pytest. The camelCase compatibility bridge SDK v2
+  installs is scheduled for removal, so a surviving camelCase read is a future hard failure that
+  would otherwise pass CI in silence.
+- Byte budgets raised deliberately, both measured: `tools/list` 83,000 -> 83,500 (the `unsupported`
+  enum value is duplicated into ~14 tools' output schemas, +206 B) and `CAPABILITIES_SCHEMA`
+  2,100 -> 2,200 B (`protocol_eras_served` carries an `items` subschema, +64 B).
 
 - `pontonier` 0.5.0 -> 0.7.0. Two upstream minors, both compatible with this bridge:
   `CONTRACT_API_VERSION` stays 1 and the 0.7.0 addition (`RunRequest.instructions_append`)

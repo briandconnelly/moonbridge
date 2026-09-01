@@ -23,6 +23,7 @@
       "resource_templates",
       "prompts",
       "initialize_response",
+      "protocol_eras",
       "error_envelope_schema",
       "result_meta_schema",
       "capabilities_result_schema",
@@ -56,8 +57,12 @@
       "kimi CLI on PATH",
       "authenticated via `kimi login`"
     ],
-    "protocol_revision": "2025-11-25",
-    "resource_error_carrier": "JSON-RPC error; the §6 ErrorInfo envelope (code/message/temporary/retry_after_ms/repair/resource_uri/request_id) is in error.data, and error.code is the MCP numeric -32002 (not found) or -32603 (read failure). Note: this server keeps `code`/`message` rather than the machine_code/human_message spelling some §6 profiles use — nesting inside `data` already avoids shadowing the native JSON-RPC keys.",
+    "protocol_eras_served": [
+      "2025-11-25",
+      "2026-07-28"
+    ],
+    "protocol_revision": "2026-07-28",
+    "resource_error_carrier": "JSON-RPC error; the §6 ErrorInfo envelope (code/message/temporary/retry_after_ms/repair/resource_uri/request_id) is in error.data. error.code is the MCP numeric for not-found — which is ERA-DEPENDENT: -32002 on the handshake era, -32602 on 2026-07-28, which forbids the old code — or -32603 (read failure) on both. Branch on error.data.code ('resource_not_found'), not the numeric, to stay era-agnostic. Note: this server keeps `code`/`message` rather than the machine_code/human_message spelling some §6 profiles use — nesting inside `data` already avoids shadowing the native JSON-RPC keys.",
     "result_meta_resource": "kimi://result-meta",
     "sandboxes": [
       "read-only",
@@ -608,7 +613,7 @@
     {
       "_meta": {
         "dev.bconnelly.moonbridge/triage": {
-          "size_bytes": 9238
+          "size_bytes": 9780
         }
       },
       "mimeType": "application/schema+json",
@@ -875,7 +880,7 @@
             "type": "string"
           },
           "fingerprint": {
-            "default": "moonbridge/0.1/schema-5",
+            "default": "moonbridge/0.1/schema-6",
             "title": "Fingerprint",
             "type": "string"
           },
@@ -918,14 +923,22 @@
             "title": "Prerequisites",
             "type": "array"
           },
+          "protocol_eras_served": {
+            "description": "Every MCP protocol revision this server negotiates, oldest first: the handshake era (session via `initialize`) and the sessionless modern era (per-request metadata). Roots are unavailable on both — pass `workspace_root` (see `meta.roots_source`).",
+            "items": {
+              "type": "string"
+            },
+            "title": "Protocol Eras Served",
+            "type": "array"
+          },
           "protocol_revision": {
-            "default": "2025-11-25",
-            "description": "The MCP protocol revision this server's wire shapes are written against (the target). The installed SDK negotiates per session: a client requesting an older mutually-supported revision (e.g. 2025-06-18) gets that version back in `initialize.protocolVersion`, so a given session's negotiated value can be earlier than this field. This field states the target, not the per-session negotiation. The 2026-07-28 migration plan for this target's deprecated features is recorded in ADR 0004 (docs/adr/0004-mcp-2026-07-28-migration.md).",
+            "default": "2026-07-28",
+            "description": "The newest MCP protocol revision this server serves (the target its wire shapes are written against). The installed SDK negotiates per connection and this server serves multiple eras — see `protocol_eras_served` for the full set — so a given session's negotiated revision can be earlier than this field. This field states the target, not the per-session negotiation. The migration that moved this from 2025-11-25 is recorded in ADR 0005 (docs/adr/0005-fastmcp-4-and-mcp-sdk-v2.md).",
             "title": "Protocol Revision",
             "type": "string"
           },
           "resource_error_carrier": {
-            "default": "JSON-RPC error; the §6 ErrorInfo envelope (code/message/temporary/retry_after_ms/repair/resource_uri/request_id) is in error.data, and error.code is the MCP numeric -32002 (not found) or -32603 (read failure). Note: this server keeps `code`/`message` rather than the machine_code/human_message spelling some §6 profiles use — nesting inside `data` already avoids shadowing the native JSON-RPC keys.",
+            "default": "JSON-RPC error; the §6 ErrorInfo envelope (code/message/temporary/retry_after_ms/repair/resource_uri/request_id) is in error.data. error.code is the MCP numeric for not-found — which is ERA-DEPENDENT: -32002 on the handshake era, -32602 on 2026-07-28, which forbids the old code — or -32603 (read failure) on both. Branch on error.data.code ('resource_not_found'), not the numeric, to stay era-agnostic. Note: this server keeps `code`/`message` rather than the machine_code/human_message spelling some §6 profiles use — nesting inside `data` already avoids shadowing the native JSON-RPC keys.",
             "title": "Resource Error Carrier",
             "type": "string"
           },
@@ -1029,7 +1042,7 @@
     {
       "_meta": {
         "dev.bconnelly.moonbridge/triage": {
-          "size_bytes": 20078
+          "size_bytes": 20093
         }
       },
       "mimeType": "application/schema+json",
@@ -1419,7 +1432,7 @@
                 "type": "integer"
               },
               "fingerprint": {
-                "default": "moonbridge/0.1/schema-5",
+                "default": "moonbridge/0.1/schema-6",
                 "title": "Fingerprint",
                 "type": "string"
               },
@@ -1537,7 +1550,8 @@
                     "enum": [
                       "client",
                       "not_negotiated",
-                      "probe_failed"
+                      "probe_failed",
+                      "unsupported"
                     ],
                     "type": "string"
                   },
@@ -2052,7 +2066,6 @@
   ],
   "initialize": {
     "capabilities": {
-      "experimental": {},
       "logging": {},
       "resources": {
         "listChanged": true,
@@ -2101,12 +2114,16 @@
     }
   ],
   "prompts": [],
+  "protocol_eras": {
+    "legacy": "2025-11-25",
+    "modern": "2026-07-28"
+  },
   "resource_templates": [],
   "resources": [
     {
       "_meta": {
         "dev.bconnelly.moonbridge/triage": {
-          "size_bytes": 9238
+          "size_bytes": 9780
         }
       },
       "description": "The canonical full kimi_capabilities result schema. The tool's outputSchema opaques\n`tool_details` and points here for the full shape (#242).",
@@ -2118,7 +2135,7 @@
     {
       "_meta": {
         "dev.bconnelly.moonbridge/triage": {
-          "size_bytes": 20078
+          "size_bytes": 20093
         }
       },
       "description": "The canonical full error envelope (ErrorResult). The per-tool outputSchemas carry\nonly a compact opaque error branch; this is the discoverable full shape.",
@@ -2155,7 +2172,7 @@
     {
       "_meta": {
         "dev.bconnelly.moonbridge/triage": {
-          "size_bytes": 14945
+          "size_bytes": 14960
         }
       },
       "description": "The canonical full result-metadata schema (Meta). Every success envelope carries an\nopaque `meta` pointer instead of inlining this per tool; this is the full shape (F1).",
@@ -2181,7 +2198,7 @@
     {
       "_meta": {
         "dev.bconnelly.moonbridge/triage": {
-          "size_bytes": 14945
+          "size_bytes": 14960
         }
       },
       "mimeType": "application/schema+json",
@@ -2546,7 +2563,7 @@
             "type": "integer"
           },
           "fingerprint": {
-            "default": "moonbridge/0.1/schema-5",
+            "default": "moonbridge/0.1/schema-6",
             "title": "Fingerprint",
             "type": "string"
           },
@@ -2664,7 +2681,8 @@
                 "enum": [
                   "client",
                   "not_negotiated",
-                  "probe_failed"
+                  "probe_failed",
+                  "unsupported"
                 ],
                 "type": "string"
               },
@@ -3199,7 +3217,7 @@
             "type": "boolean"
           },
           "fingerprint": {
-            "default": "moonbridge/0.1/schema-5",
+            "default": "moonbridge/0.1/schema-6",
             "title": "Fingerprint",
             "type": "string"
           },
@@ -3418,6 +3436,12 @@
                 "type": "boolean"
               },
               "prerequisites": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "protocol_eras_served": {
                 "items": {
                   "type": "string"
                 },
@@ -4847,7 +4871,8 @@
                     "enum": [
                       "client",
                       "not_negotiated",
-                      "probe_failed"
+                      "probe_failed",
+                      "unsupported"
                     ],
                     "type": "string"
                   },
@@ -5351,7 +5376,8 @@
                     "enum": [
                       "client",
                       "not_negotiated",
-                      "probe_failed"
+                      "probe_failed",
+                      "unsupported"
                     ],
                     "type": "string"
                   },

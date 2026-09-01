@@ -178,48 +178,32 @@ class _FakeCtx:
         return [_FakeRoot(u) for u in self._uris]
 
 
-async def test_roots_from_ctx_file_uris():
-    ctx = _FakeCtx(["file:///Users/me/repo", "https://not-a-file/x"])
-    paths, source = await server._roots_from_ctx(ctx)
-    assert paths == ["/Users/me/repo"]
-    assert source == "client"
+async def test_roots_from_ctx_always_reports_unsupported():
+    """MCP SDK v2 removed the server-to-client `roots/list` request, so there is no probe
+    left to run — every call reports `unsupported` and no candidate roots, whatever the
+    context looks like (ADR 0005). The three older values stay in `RootsSource` for
+    clients holding stored envelopes, but this server no longer emits them."""
+    for ctx in (None, _FakeCtx(["file:///Users/me/repo"]), _FakeCtx([], raise_exc=True)):
+        assert await server._roots_from_ctx(ctx) == ([], "unsupported")
 
 
-async def test_roots_from_ctx_none():
-    assert await server._roots_from_ctx(None) == ([], "not_negotiated")
+async def test_context_really_has_no_list_roots():
+    """The reason `_roots_from_ctx` is a constant, pinned against the live SDK rather than
+    trusted from the upgrade notes: if a future FastMCP restores `ctx.list_roots` (e.g. via
+    the guard pattern), this fails and the constant gets revisited instead of silently
+    withholding roots a client could now supply. Verified against fastmcp 4.0.0 on both
+    protocol eras."""
+    from fastmcp import Context
+
+    assert not hasattr(Context, "list_roots")
 
 
-async def test_roots_from_ctx_probe_failure_degrades():
-    """Capability advertised, but the `list_roots()` probe itself raised — a
-    fact distinct from "unsupported"/not negotiated (see the RuntimeError-on-`ctx.session`
-    test below, which is the true not-negotiated-shaped failure)."""
-    ctx = _FakeCtx([], raise_exc=True)
-    assert await server._roots_from_ctx(ctx) == ([], "probe_failed")
-
-
-async def test_roots_from_ctx_no_session_reports_not_negotiated():
-    """`Context.session` is a property that raises RuntimeError when no session has been
-    established yet. That must map to `not_negotiated` (we could not establish that roots
-    were negotiated at all), not escape uncaught or be mistaken for `probe_failed` (which is
-    reserved for a `list_roots()` call that raised after capability negotiation succeeded)."""
-
-    class _NoSessionCtx:
-        @property
-        def session(self):
-            raise RuntimeError("session is not available")
-
-    assert await server._roots_from_ctx(_NoSessionCtx()) == ([], "not_negotiated")
-
-
-async def test_consult_uses_roots(monkeypatch, clean_env, tmp_path):
-    async def fake(*args, **kwargs):
-        return server.kimi.KimiRunResult(
-            run=runtime.CommandRun("", "", 0, 1, False), last_message="answer", events=""
-        )
-
-    monkeypatch.setattr(server.kimi, "run_kimi_exec", fake)
-    # The sync consult now dispatches to the detached worker; assert the tool resolved
-    # the MCP root into the job spec's workspace (source == "roots") at the start seam.
+async def test_consult_without_workspace_root_falls_back_to_cwd(monkeypatch, clean_env, tmp_path):
+    """Was test_consult_uses_roots. With `roots/list` gone from the SDK (ADR 0005) a client
+    context can no longer contribute a workspace, so a call that omits `workspace_root`
+    resolves to the server's own cwd and reports `workspace_source == "cwd"` — the
+    "roots" source is now unreachable. Passing `workspace_root` explicitly is the
+    supported way to aim a call at a directory."""
     captured = {}
 
     async def capture_start(meta, cwd, *, kind, spec, deadline):
@@ -233,7 +217,12 @@ async def test_consult_uses_roots(monkeypatch, clean_env, tmp_path):
     ctx = _FakeCtx([f"file://{tmp_path}"])
     res = await server.kimi_consult("q", ctx=ctx)
     assert res["ok"] is False  # short-circuited by the capture stub
-    assert captured["source"] == "roots"
+    assert captured["source"] == "cwd"
+    assert captured["cwd"] != str(tmp_path)  # the ctx roots are ignored entirely
+
+    # The explicit argument still aims the call wherever the caller wants.
+    res = await server.kimi_consult("q", workspace_root=str(tmp_path), ctx=ctx)
+    assert captured["source"] == "param"
     assert captured["cwd"] == str(tmp_path)
 
 

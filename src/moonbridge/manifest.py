@@ -99,7 +99,14 @@ def _envelope_block(content: Any) -> dict[str, Any]:
 
 async def build_manifest() -> dict[str, Any]:
     """Assemble the normalized, canonical agent-visible surface manifest."""
-    async with Client(mcp) as client:
+    # mode="legacy" is explicit and load-bearing (ADR 0005). FastMCP 4 defaults a Client
+    # to mode="auto", which against a FastMCP server negotiates the sessionless
+    # 2026-07-28 era — an era with no `initialize` handshake at all, where
+    # `client.initialize_result` is None. Letting that default stand would drop the whole
+    # initialize block (serverInfo/protocolVersion/capabilities) from the guarded surface
+    # without failing anything. Pin the era instead, and capture the modern one separately
+    # below so the dual-era support is itself guarded.
+    async with Client(mcp, mode="legacy") as client:
         tools = [_canonicalize(_dump(t)) for t in await client.list_tools()]
         resources = [_canonicalize(_dump(r)) for r in await client.list_resources()]
         templates = [_canonicalize(_dump(t)) for t in await client.list_resource_templates()]
@@ -135,7 +142,16 @@ async def build_manifest() -> dict[str, Any]:
         k: v for k, v in kimi_capabilities(detail="full").items() if k not in _CAPABILITIES_EXCLUDE
     }
 
+    # The negotiated revision of each era this server now serves. Captured from live
+    # handshakes rather than hardcoded, so an SDK that silently stops serving an era
+    # moves the snapshot instead of leaving a stale constant behind.
+    async with Client(mcp, mode="legacy") as legacy:
+        legacy_era = legacy.protocol_version
+    async with Client(mcp, mode="auto") as modern:
+        modern_era = modern.protocol_version
+
     return {
+        "protocol_eras": {"legacy": legacy_era, "modern": modern_era},
         "tools": sorted(tools, key=lambda t: t["name"]),
         "resources": sorted(resources, key=lambda r: r["uri"]),
         "resource_templates": sorted(templates, key=lambda t: t["uriTemplate"]),

@@ -34,6 +34,7 @@ fields). Failure is uniform: an `error` object built for machine-driven recovery
 - `invalid_arguments` — set when `code` is `invalid_arguments`: a list of
   `{field, reason, allowed_values}` per offending argument; `details` mirrors the first.
 - `limit_bytes`/`actual_bytes`/`candidate_roots` — size/roots context for the relevant codes.
+  (`candidate_roots` accompanies `workspace_outside_roots`, which is unreachable since ADR 0005.)
 
 Absent optional fields are omitted from the payload (no placeholder nulls), except
 `retry_after_ms`. The full schema is published at the `kimi://error-envelope` resource.
@@ -207,18 +208,18 @@ a failure state; judge spend from the size of the task instead, and handle a pro
 ## Workspace selection
 
 When calling the MCP tools directly, pass `workspace_root` as an absolute path to the repository you
-want Kimi to inspect or edit. Claude Code usually supplies the current repo as an MCP root for slash
-commands; if neither an MCP root nor `workspace_root` is available, the server may fall back to its
-own launch directory and return `meta.workspace_warning`.
+want Kimi to inspect or edit. **Pass it.** As of ADR 0005 the server can no longer read MCP roots at
+all, so a call that omits `workspace_root` falls back to the server's own launch directory and
+returns `meta.workspace_warning` — there is no client-supplied root left to save it.
 
-`meta.roots_source` reports what the MCP-roots probe saw, which is a different axis from
-`workspace_source` below: `client` (the client advertised the roots capability and the probe
-returned, possibly an empty list), `not_negotiated` (the client never advertised the capability —
-pass `workspace_root` instead), or `probe_failed` (roots were advertised but the probe errored this
-turn — retrying may help). It separates a client limitation from a transient failure, which a bare
-empty list cannot. It does **not** say where the workspace came from: `workspace_source` answers
-that, and `roots_source: "client"` coexists with `workspace_source: "param"` (an explicit
-`workspace_root` wins over roots) or `"cwd"` (the probe returned no usable root).
+`meta.roots_source` reports what the MCP-roots probe saw. It is now always `unsupported`: MCP SDK v2
+removed the server-to-client `roots/list` request on every protocol era, so no probe runs. The three
+older values — `client`, `not_negotiated`, `probe_failed` — remain in the published value set so a
+stored envelope still validates against it, but this server no longer emits them. It does **not** say
+where the workspace came from: `workspace_source` answers that, and it is now either `param` (you
+passed `workspace_root`) or `cwd` (you did not). The `roots` value of `workspace_source`, the
+`workspace_outside_roots` error code, and its `candidate_roots` detail are likewise still advertised
+but unreachable, for the same reason.
 
 On a **successful** preview, `kimi_dry_run` and `kimi_delegate_dry_run` expose the same value as a
 **top-level** `roots_source` rather than under `meta`; when their error envelopes report it at all it
@@ -248,7 +249,8 @@ preview at all; for a high-effort or broad repo-grounded consult, prefer `kimi_c
 
 The job-lifecycle tools (`kimi_job_status`, `kimi_job_list`, `kimi_job_cancel`) carry the resolved
 workspace on **successful** responses too — a compact `workspace` object with `cwd`,
-`workspace_source` (`param`/`roots`/`cwd`), and `workspace_warning` (set on a cwd fallback). Because
+`workspace_source` (`param`/`roots`/`cwd` — `roots` unreachable since ADR 0005), and
+`workspace_warning` (set on a cwd fallback). Because
 jobs are scoped per workspace, this lets you confirm which repository a poll or list targeted instead
 of mistaking a wrong-workspace lookup for an empty list or `job_not_found`. (Error responses already
 carry the same context via `meta`.)

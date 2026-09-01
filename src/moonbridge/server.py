@@ -15,18 +15,15 @@ import os
 import signal
 import sys
 import time
-from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Any, Literal, cast, get_args
-from urllib.parse import unquote, urlparse
 from uuid import uuid4
 
 from fastmcp import Context, FastMCP
-from fastmcp.exceptions import DisabledError, NotFoundError, ResourceError
+from fastmcp.exceptions import DisabledError, McpError, NotFoundError, ResourceError
 from fastmcp.exceptions import ValidationError as FastMCPValidationError
 from fastmcp.server.middleware import Middleware
 from fastmcp.tools import ToolResult
-from mcp import McpError
-from mcp.types import INTERNAL_ERROR, ErrorData
+from mcp.types import INTERNAL_ERROR
 from pydantic import BaseModel, Field, ValidationError
 
 if TYPE_CHECKING:
@@ -269,7 +266,14 @@ _orig_get_capabilities = _lowlevel_server.get_capabilities
 
 def _get_capabilities_without_prompts_or_extensions(*args: Any, **kwargs: Any) -> Any:
     caps = _orig_get_capabilities(*args, **kwargs)
-    extensions = (caps.model_extra or {}).get("extensions")
+    # `extensions` is a DECLARED field on ServerCapabilities as of MCP SDK v2; under v1 it
+    # only ever arrived as an undeclared extra. Read the declared field first and fall back
+    # to `model_extra`, because reading only `model_extra` (as this did under v1) makes the
+    # lookup return None on v2 and then nulls the whole key — suppressing every extension
+    # the server legitimately advertises, which is exactly what this filter must not do.
+    extensions = getattr(caps, "extensions", None)
+    if extensions is None:
+        extensions = (caps.model_extra or {}).get("extensions")
     filtered_extensions = (
         {ext_id: value for ext_id, value in extensions.items() if ext_id != _UI_EXTENSION_ID}
         if isinstance(extensions, dict)
@@ -600,10 +604,39 @@ class _ArgumentValidationMiddleware(Middleware):
 mcp.add_middleware(_ArgumentValidationMiddleware())
 
 # Resource-read error envelope (#181/F9) ------------------------------------- #
-# MCP numeric error code for "resource not found". The MCP spec / SDK use -32002 for it
-# (see fastmcp.server.mixins.mcp_operations), but the SDK exposes no named constant, so
-# we name it here. Read failures reuse the JSON-RPC standard INTERNAL_ERROR (-32603).
+# MCP numeric error code for "resource not found" — ERA-DEPENDENT since ADR 0005.
+# 2025-11-25 and earlier use -32002 (see fastmcp.server.mixins.mcp_operations); the SDK
+# exposes no named constant, so we name both here. 2026-07-28 renumbered it to -32602 and
+# states that implementations of that revision MUST NOT emit -32002
+# (modelcontextprotocol.io/specification/2026-07-28/basic/index § Error Codes). This server
+# serves both eras, so a single constant would violate the spec on one of them.
+# Read failures reuse the JSON-RPC standard INTERNAL_ERROR (-32603) on both eras.
 _MCP_RESOURCE_NOT_FOUND = -32002
+_MCP_RESOURCE_NOT_FOUND_MODERN = -32602
+# Revisions that use the sessionless per-request envelope, and so the renumbered code.
+# Read off the installed SDK rather than hardcoded, so a future modern revision is covered
+# without an edit here; falls back to the known value if the SDK moves the constant.
+try:
+    from mcp_types.version import MODERN_PROTOCOL_VERSIONS
+
+    _MODERN_PROTOCOL_VERSIONS: tuple[str, ...] = tuple(MODERN_PROTOCOL_VERSIONS)
+except ImportError:  # pragma: no cover - defensive: SDK layout change
+    _MODERN_PROTOCOL_VERSIONS = ("2026-07-28",)
+
+
+def _resource_not_found_code(context: Any) -> int:
+    """The not-found code for the era this request negotiated.
+
+    Fails SAFE to the legacy -32002: an unreadable protocol version means we cannot prove
+    the request is on a modern connection, and emitting the legacy code to a modern client
+    is a spec violation in the same direction the SDK itself still takes by default,
+    whereas emitting -32602 to a legacy client would break code that matches -32002."""
+    fastmcp_context = getattr(context, "fastmcp_context", None)
+    request_context = getattr(fastmcp_context, "request_context", None)
+    version = getattr(request_context, "protocol_version", None)
+    if version in _MODERN_PROTOCOL_VERSIONS:
+        return _MCP_RESOURCE_NOT_FOUND_MODERN
+    return _MCP_RESOURCE_NOT_FOUND
 
 
 class _ResourceErrorMiddleware(Middleware):
@@ -621,7 +654,9 @@ class _ResourceErrorMiddleware(Middleware):
 
     Exception routing is deliberate and ordered (per a cross-model design review):
     - ``NotFoundError``/``DisabledError`` (unknown or disabled URI) → ``resource_not_found``
-      with MCP numeric -32002. FastMCP maps both to "resource not found" itself, so we match.
+      with the era's MCP numeric code (-32002 handshake, -32602 modern; see
+      ``_resource_not_found_code``). FastMCP maps both to "resource not found" itself, so
+      we match.
     - ``ResourceError`` (a resource function raised; the core wraps arbitrary handler
       exceptions into this) → ``internal_error`` with -32603.
     - Any ``McpError`` an inner layer already raised is re-raised untouched — never
@@ -641,7 +676,7 @@ class _ResourceErrorMiddleware(Middleware):
             return await call_next(context)
         except (NotFoundError, DisabledError) as exc:
             raise self._envelope_error(
-                "resource_not_found", _MCP_RESOURCE_NOT_FOUND, "Resource not found.", uri
+                "resource_not_found", _resource_not_found_code(context), "Resource not found.", uri
             ) from exc
         except ResourceError as exc:
             raise self._envelope_error(
@@ -659,7 +694,7 @@ class _ResourceErrorMiddleware(Middleware):
         info.resource_uri = resource_uri
         info.request_id = uuid4().hex
         data = serialize_error_info(info)
-        return McpError(ErrorData(code=mcp_code, message=message, data=data))
+        return McpError(code=mcp_code, message=message, data=data)
 
 
 mcp.add_middleware(_ResourceErrorMiddleware())
@@ -902,48 +937,27 @@ ReasoningEffortDryRunParam = Annotated[
 # --------------------------------------------------------------------------- #
 # Shared helpers
 # --------------------------------------------------------------------------- #
-async def _roots_from_ctx(ctx: Context | None) -> tuple[list[str], RootsSource]:
-    """Absolute filesystem paths from the client's MCP roots (file:// only), plus which of
-    three states produced them.
+async def _roots_from_ctx(ctx: Context | None) -> tuple[list[str], RootsSource]:  # noqa: ARG001
+    """Always ``([], "unsupported")``: this server can no longer ask a client for its roots.
 
-    Gating on the negotiated capability (contract-checklist §1/§2) is what separates "this
-    client never advertised roots" from "the roots call failed this turn" — previously both
-    degraded to an empty list and a silent fallback to the server's own cwd, on a call that
-    spends money. Roots stay advisory either way: `workspace_root` is the durable path, and
-    the MCP 2026-07-28 spec (final, not an RC) deprecates roots in favor of tool-argument
-    scoping — see ADR 0004 for the migration plan."""
-    if ctx is None:
-        return [], "not_negotiated"
-    try:
-        # ctx.session is a property that raises RuntimeError when no session has been
-        # established yet (e.g. called outside a request context) — fold that into
-        # "not_negotiated" (the honest answer: we could not establish that roots were
-        # negotiated) rather than letting it escape uncaught, which the old blanket
-        # `except` below incidentally covered before this pre-check existed.
-        params = getattr(ctx.session, "client_params", None)
-    except RuntimeError:
-        return [], "not_negotiated"
-    if params is None or getattr(params.capabilities, "roots", None) is None:
-        return [], "not_negotiated"
-    try:
-        roots = await ctx.list_roots()
-    except Exception:
-        return [], "probe_failed"
-    paths: list[str] = []
-    for root in roots:
-        uri = str(root.uri)
-        parsed = urlparse(uri)
-        # Only local file URIs: an empty or "localhost" authority (RFC 8089). A
-        # non-local host (file://example.com/tmp) or a drive-letter authority
-        # (file://C:/repo) would otherwise have its path misread as a local path.
-        if parsed.scheme == "file" and parsed.netloc in ("", "localhost"):
-            path = unquote(parsed.path)
-            # Keep only non-empty absolute paths: a malformed file: URI (empty or
-            # relative path) is not an actionable workspace and would contradict the
-            # "absolute filesystem paths" contract candidate_roots advertises (#95).
-            if path and Path(path).is_absolute():
-                paths.append(path)
-    return paths, "client"
+    FastMCP 4 / MCP SDK v2 removed ``ctx.list_roots()`` from ``Context`` on EVERY protocol
+    era, not just the sessionless one — verified, ``hasattr(ctx, "list_roots")`` is False
+    under both ``mode="legacy"`` and ``mode="auto"``. ``roots/list`` was a server-to-client
+    request, and the modern protocol has no server-to-client request direction at all, so
+    the pushed form has nowhere to go (ADR 0005).
+
+    ``workspace_root`` is the durable, first-choice path on every tool that resolves a
+    working directory, and was already the primary mechanism here — ADR 0004 recorded roots
+    as an advisory fallback and scheduled its removal for exactly this trigger ("drop it
+    only when/if the underlying MCP SDK removes roots support"). Tool-argument scoping is
+    also the migration target the 2026-07-28 spec names for the deprecated roots feature.
+
+    ``ctx`` is retained so the six call sites and the tuple contract are unchanged; it is
+    deliberately unused. This is a function rather than an inlined constant so the reason
+    stays attached to the behavior, and so restoring a probe (should the guard pattern ever
+    be worth its extra round trip on a paid call) is a one-place change.
+    """
+    return [], "unsupported"
 
 
 def _dry_run_effective_model(requested: str | None) -> str | None:
@@ -2001,7 +2015,7 @@ def kimi_capabilities(
         prerequisites=["kimi CLI on PATH", "authenticated via `kimi login`"],
         deprecation_policy="Pre-1.0: minor versions may change the agent-visible "
         "surface; the fingerprint changes when they do.",
-        protocol_revision="2025-11-25",
+        protocol_revision="2026-07-28",
     )
     # Inject per-tool error codes from the single source of truth; KeyError here
     # means a newly advertised tool is missing from _TOOL_ERROR_CODES. Strip any

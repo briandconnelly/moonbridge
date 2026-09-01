@@ -309,7 +309,7 @@ def test_capabilities_names_protocol_revision():
     # #423: the targeted MCP protocol revision was previously derivable only from the
     # `initialize` wire response, never stated in the agent-visible capability payload.
     res = server.kimi_capabilities()
-    assert res["protocol_revision"] == "2025-11-25"
+    assert res["protocol_revision"] == "2026-07-28"
 
 
 def test_capabilities_names_annotations_reading():
@@ -341,21 +341,37 @@ def test_protocol_revision_matches_installed_sdk_target():
     moving. Both assertions below use that constant, plus `SUPPORTED_PROTOCOL_VERSIONS`
     for the weaker sanity check, so a future SDK upgrade trips this test loudly instead
     of staling the declared value."""
-    import mcp.types as mcp_types
-    from mcp.shared.version import SUPPORTED_PROTOCOL_VERSIONS
+    from mcp_types.version import (
+        HANDSHAKE_PROTOCOL_VERSIONS,
+        LATEST_PROTOCOL_VERSION,
+        MODERN_PROTOCOL_VERSIONS,
+        SUPPORTED_PROTOCOL_VERSIONS,
+    )
 
-    declared = server.kimi_capabilities()["protocol_revision"]
+    caps = server.kimi_capabilities()
+    declared = caps["protocol_revision"]
     assert declared in SUPPORTED_PROTOCOL_VERSIONS, (
         f"{declared!r} is not one of the installed SDK's SUPPORTED_PROTOCOL_VERSIONS "
-        f"{SUPPORTED_PROTOCOL_VERSIONS} (mcp/shared/version.py)"
+        f"{SUPPORTED_PROTOCOL_VERSIONS} (mcp_types/version.py)"
     )
-    assert declared == mcp_types.LATEST_PROTOCOL_VERSION, (
+    assert declared == LATEST_PROTOCOL_VERSION, (
         f"protocol_revision ({declared!r}) no longer matches the installed SDK's own "
-        f"default/fallback revision (mcp.types.LATEST_PROTOCOL_VERSION == "
-        f"{mcp_types.LATEST_PROTOCOL_VERSION!r}) — a dependency upgrade moved the "
-        "SDK's target; update protocol_revision (and ADR 0004) deliberately rather "
+        f"newest known revision (LATEST_PROTOCOL_VERSION == "
+        f"{LATEST_PROTOCOL_VERSION!r}) — a dependency upgrade moved the "
+        "SDK's target; update protocol_revision (and ADR 0005) deliberately rather "
         "than leaving the declared value stale."
     )
+    # The advertised era set must stay a real subset of what the SDK can negotiate, and
+    # must actually span both eras — an SDK upgrade that drops the handshake era should
+    # fail here rather than leave this server advertising a revision it cannot serve.
+    served = caps["protocol_eras_served"]
+    assert set(served) <= set(SUPPORTED_PROTOCOL_VERSIONS), (
+        f"protocol_eras_served {served} advertises a revision the installed SDK does not "
+        f"support {SUPPORTED_PROTOCOL_VERSIONS}"
+    )
+    assert set(served) & set(HANDSHAKE_PROTOCOL_VERSIONS), "no handshake-era revision served"
+    assert set(served) & set(MODERN_PROTOCOL_VERSIONS), "no modern-era revision served"
+    assert declared == max(served), "protocol_revision must be the newest era served"
 
 
 def test_instructions_name_the_error_carrier():
@@ -2420,7 +2436,7 @@ def test_job_status_model_requires_result_ok_from_store():
 
 
 def test_fingerprint_is_pinned():
-    assert FINGERPRINT == "moonbridge/0.1/schema-5"
+    assert FINGERPRINT == "moonbridge/0.1/schema-6"
 
 
 def test_capabilities_payload_discloses_fingerprint_covers():
@@ -2436,7 +2452,7 @@ def test_server_advertises_tools_list_changed():
     """The server declares the tools `listChanged` capability so clients know the
     contract even though the static tool list never changes mid-session (#71)."""
     opts = server.mcp._mcp_server.create_initialization_options()
-    assert opts.capabilities.tools.listChanged is True
+    assert opts.capabilities.tools.list_changed is True
 
 
 async def test_sync_active_tools_document_progress_and_job_recovery():
@@ -3491,12 +3507,12 @@ async def test_job_lifecycle_annotations_split_read_from_mutation(tool_name, rea
     when readOnlyHint is false (audit F4)."""
     tools = {t.name: t for t in await server.mcp.list_tools()}
     ann = tools[tool_name].annotations
-    assert ann.readOnlyHint is read_only
-    assert ann.idempotentHint is idempotent
+    assert ann.read_only_hint is read_only
+    assert ann.idempotent_hint is idempotent
     # Every job tool is local (closed-world), so it's non-destructive; read-only
     # tools omit destructiveHint (audit F4), mutating tools state it explicitly.
-    assert ann.openWorldHint is False
-    assert ann.destructiveHint is (False if not read_only else None)
+    assert ann.open_world_hint is False
+    assert ann.destructive_hint is (False if not read_only else None)
 
 
 async def test_job_cancel_is_idempotent_but_not_read_only():
@@ -3506,10 +3522,10 @@ async def test_job_cancel_is_idempotent_but_not_read_only():
     effect. The earlier idempotentHint:false deterred that safe retry (#141)."""
     tools = {t.name: t for t in await server.mcp.list_tools()}
     ann = tools["kimi_job_cancel"].annotations
-    assert ann.readOnlyHint is False
-    assert ann.idempotentHint is True
-    assert ann.openWorldHint is False
-    assert ann.destructiveHint is False
+    assert ann.read_only_hint is False
+    assert ann.idempotent_hint is True
+    assert ann.open_world_hint is False
+    assert ann.destructive_hint is False
 
 
 @pytest.mark.parametrize(
@@ -3522,10 +3538,10 @@ async def test_async_launchers_are_not_read_only(tool_name):
     consult/review whose underlying run is read-only (issue #138)."""
     tools = {t.name: t for t in await server.mcp.list_tools()}
     ann = tools[tool_name].annotations
-    assert ann.readOnlyHint is False
-    assert ann.idempotentHint is False
-    assert ann.openWorldHint is True
-    assert ann.destructiveHint is False
+    assert ann.read_only_hint is False
+    assert ann.idempotent_hint is False
+    assert ann.open_world_hint is True
+    assert ann.destructive_hint is False
 
 
 @pytest.mark.parametrize(
@@ -3539,7 +3555,7 @@ async def test_sync_active_tools_are_not_read_only(tool_name):
     CapabilitiesResult.annotations_reading (#426) states on the agent-visible payload."""
     tools = {t.name: t for t in await server.mcp.list_tools()}
     ann = tools[tool_name].annotations
-    assert ann.readOnlyHint is False
+    assert ann.read_only_hint is False
 
 
 @pytest.mark.parametrize(
@@ -3552,7 +3568,7 @@ async def test_dry_run_tools_are_read_only(tool_name):
     CapabilitiesResult.annotations_reading (#426) states on the agent-visible payload."""
     tools = {t.name: t for t in await server.mcp.list_tools()}
     ann = tools[tool_name].annotations
-    assert ann.readOnlyHint is True
+    assert ann.read_only_hint is True
 
 
 def test_job_status_model_surfaces_cleanup_warnings():
@@ -4564,6 +4580,10 @@ async def test_workspace_outside_roots_carries_candidate_roots(monkeypatch, clea
     outside = tmp_path / "other"
     outside.mkdir()
 
+    # NOTE (ADR 0005): `_roots_from_ctx` returns no roots in production any more, so
+    # `workspace_outside_roots` and `candidate_roots` are unreachable on the live path.
+    # This stub keeps the resolver branch itself covered — if roots ever return (the
+    # guard pattern), the behavior it pins is still the intended one.
     async def fake_roots(ctx):
         return [str(root)], "client"
 
@@ -4587,42 +4607,6 @@ async def test_invalid_workspace_root_omits_candidate_roots(monkeypatch, clean_e
     res = await server.kimi_consult("q", workspace_root="relative/not/abs")
     assert res["error"]["code"] == "invalid_workspace_root"
     assert res["error"].get("candidate_roots") is None
-
-
-async def test_roots_from_ctx_filters_non_absolute_and_non_file(tmp_path):
-    """_roots_from_ctx returns only non-empty absolute file:// paths, so candidate_roots
-    never advertises a malformed (empty/relative) or non-file root (#95, Copilot review)."""
-
-    class _Root:
-        def __init__(self, uri):
-            self.uri = uri
-
-    class _Caps:
-        roots = object()  # advertised: exercise the file-URI filtering, not the gate
-
-    class _Params:
-        capabilities = _Caps()
-
-    class _Session:
-        client_params = _Params()
-
-    class _Ctx:
-        session = _Session()
-
-        async def list_roots(self):
-            return [
-                _Root(f"file://{tmp_path}"),  # valid absolute (empty authority) -> kept
-                _Root(f"file://localhost{tmp_path}"),  # localhost authority -> kept
-                _Root("file:relative/path"),  # relative -> dropped
-                _Root("file://"),  # empty path -> dropped
-                _Root("file://example.com/tmp/repo"),  # remote host -> dropped
-                _Root("file://C:/repo"),  # drive-letter authority -> dropped
-                _Root("https://example.com"),  # non-file scheme -> dropped
-            ]
-
-    paths, source = await server._roots_from_ctx(_Ctx())
-    assert paths == [str(tmp_path), str(tmp_path)]
-    assert source == "client"
 
 
 # --- async job-lifecycle capability metadata (#94) ---------------------------
@@ -4703,7 +4687,10 @@ async def test_initialize_does_not_advertise_prompts(clean_env):
     static catalog misleads clients (audit F5)."""
     from fastmcp import Client
 
-    async with Client(server.mcp) as client:
+    # mode="legacy": `initialize` exists only on the handshake era. A default
+    # (auto) client negotiates the sessionless 2026-07-28 era, where
+    # `initialize_result` is None — see ADR 0005.
+    async with Client(server.mcp, mode="legacy") as client:
         caps = client.initialize_result.capabilities
     assert caps.prompts is None
     assert caps.tools is not None  # the override must not clobber siblings
@@ -4723,7 +4710,10 @@ async def test_initialize_does_not_advertise_the_ui_extension(clean_env):
     UI/Apps code. Advertising it is a false capability claim (#424)."""
     from fastmcp import Client
 
-    async with Client(server.mcp) as client:
+    # mode="legacy": `initialize` exists only on the handshake era. A default
+    # (auto) client negotiates the sessionless 2026-07-28 era, where
+    # `initialize_result` is None — see ADR 0005.
+    async with Client(server.mcp, mode="legacy") as client:
         caps = client.initialize_result.capabilities
     assert caps.model_extra is None or "extensions" not in caps.model_extra
     assert caps.tools is not None  # the override must not clobber siblings
@@ -4734,10 +4724,17 @@ async def test_initialize_does_not_advertise_the_ui_extension(clean_env):
     assert "extensions" not in wire
 
 
-async def test_initialize_ui_extension_filter_preserves_other_extensions(clean_env):
+async def test_ui_extension_filter_preserves_other_extensions(clean_env):
     """The seam must filter only the ui extension out of the extensions mapping, not
     null the whole key — a future FastMCP version may legitimately add a different
-    extension, and this server must not silently suppress that one too (#424 review)."""
+    extension, and this server must not silently suppress that one too (#424 review).
+
+    Asserted on the MODERN era, which is where the filter is still load-bearing: MCP SDK
+    v2 does not carry `extensions` into the handshake-era `initialize` result at all
+    (verified — a sentinel injected at this seam does not reach the legacy wire), while
+    the sessionless era advertises them through `server/discover`. Reading capabilities
+    via `client.server_capabilities` rather than `initialize_result` keeps the assertion
+    era-agnostic; only the era pin below decides which path is exercised."""
     from fastmcp import Client
 
     sentinel_id = "io.example/sentinel"
@@ -4751,11 +4748,30 @@ async def test_initialize_ui_extension_filter_preserves_other_extensions(clean_e
 
     clean_env.setattr(server, "_orig_get_capabilities", fake_orig_get_capabilities)
 
-    async with Client(server.mcp) as client:
-        caps = client.initialize_result.capabilities
+    async with Client(server.mcp, mode="auto") as client:
+        caps = client.server_capabilities
 
     wire = caps.model_dump(by_alias=True, mode="json", exclude_none=True)
     assert wire["extensions"] == {sentinel_id: {"foo": "bar"}}
+
+
+async def test_ui_extension_is_not_advertised_on_the_modern_era(clean_env):
+    """#424's actual goal, pinned on the modern era — the only era that advertises
+    extensions at all under SDK v2. Without the seam the SDK advertises
+    `io.modelcontextprotocol/ui`, which this server does not implement (verified: removing
+    the seam puts that id on the modern wire).
+
+    This guard does NOT catch the `model_extra` regression that
+    test_ui_extension_filter_preserves_other_extensions covers — checked, not assumed: the
+    pre-fix lookup found nothing and nulled the whole key, which over-suppresses and so
+    still satisfies this assertion. The two tests bound the seam from opposite sides, and
+    only the other one fails against the pre-fix code."""
+    from fastmcp import Client
+
+    async with Client(server.mcp, mode="auto") as client:
+        caps = client.server_capabilities
+
+    assert caps.extensions is None or server._UI_EXTENSION_ID not in caps.extensions
 
 
 # --- advertised error codes must be MCP-reachable (#92) -----------------------
@@ -4787,7 +4803,7 @@ async def test_advertised_error_codes_exclude_schema_gated(clean_env):
     caps = {t["name"]: t for t in server.kimi_capabilities()["tool_details"]}
     covered: set[str] = set()
     for tool in tools:
-        props = (tool.inputSchema or {}).get("properties", {})
+        props = (tool.input_schema or {}).get("properties", {})
         advertised = set(caps.get(tool.name, {}).get("error_codes", []))
         for param, gated_code in _ENUM_PARAM_TO_GATED_CODE.items():
             if _is_enum_param(props.get(param)):
@@ -4877,7 +4893,7 @@ async def test_input_schemas_describe_ambiguous_params(clean_env):
         tools = await client.list_tools()
     seen: set[str] = set()
     for tool in tools:
-        props = (tool.inputSchema or {}).get("properties", {})
+        props = (tool.input_schema or {}).get("properties", {})
         for param, must_contain in _DESCRIBED_PARAMS.items():
             if param in props:
                 seen.add(param)
@@ -4896,7 +4912,7 @@ async def test_timeout_seconds_description_matches_clamp_behavior(clean_env):
     async with Client(server.mcp) as client:
         tools = await client.list_tools()
     consult = next(t for t in tools if t.name == "kimi_consult")
-    spec = consult.inputSchema["properties"]["timeout_seconds"]
+    spec = consult.input_schema["properties"]["timeout_seconds"]
     desc = spec["description"]
     assert "10" in desc and "600" in desc
     # No numeric schema constraint — behavior is clamp, not reject.
@@ -4911,7 +4927,7 @@ async def test_delegate_dry_run_param_descriptions_do_not_claim_a_run(clean_env)
     async with Client(server.mcp) as client:
         tools = await client.list_tools()
     dry = next(t for t in tools if t.name == "kimi_delegate_dry_run")
-    props = dry.inputSchema["properties"]
+    props = dry.input_schema["properties"]
     task_desc = props["task"]["description"].lower()
     assert "does not call kimi" in task_desc and "return a diff" in task_desc
     assert "does not call kimi" in props["model"]["description"].lower()
@@ -4990,14 +5006,17 @@ async def test_unknown_resource_read_carries_error_envelope(clean_env):
     carries the §6 ErrorInfo envelope (code/message/temporary/retry_after_ms/repair) so
     the resource surface matches the unified contract every tool already honors."""
     from fastmcp import Client
-    from mcp import McpError
+    from fastmcp.exceptions import McpError
 
     with pytest.raises(McpError) as excinfo:
-        async with Client(server.mcp) as client:
+        # mode="legacy" pins the era so the numeric assertion below names one code. The
+        # modern era renumbers it to -32602 (ADR 0005) — that split is covered by
+        # TestResourceNotFoundCodePerEra; this test is about the envelope in `data`.
+        async with Client(server.mcp, mode="legacy") as client:
             await client.read_resource("kimi://does-not-exist")
 
     err = excinfo.value.error
-    assert err.code == -32002  # MCP numeric "resource not found"
+    assert err.code == -32002  # MCP numeric "resource not found" (handshake era)
     # The URI/exception text is NOT echoed into the client-visible message (redaction
     # posture, #189) — it is a bounded generic string.
     assert err.message == "Resource not found."
@@ -5025,8 +5044,7 @@ async def test_resource_error_middleware_maps_read_failure_to_internal_error():
     """A ResourceError (a resource function raised; FastMCP's core wraps arbitrary
     handler exceptions into it) maps to internal_error with MCP numeric -32603 — the
     branch our static resources can't exercise end-to-end, driven directly here."""
-    from fastmcp.exceptions import ResourceError
-    from mcp import McpError
+    from fastmcp.exceptions import McpError, ResourceError
 
     mw = server._ResourceErrorMiddleware()
 
@@ -5045,11 +5063,10 @@ async def test_resource_error_middleware_does_not_reclassify_mcp_error():
     """An McpError raised by an inner layer keeps its own code/data — the middleware
     only wraps FastMCP's NotFoundError/DisabledError/ResourceError, never a protocol
     error that already carries the contract."""
-    from mcp import McpError
-    from mcp.types import ErrorData
+    from fastmcp.exceptions import McpError
 
     mw = server._ResourceErrorMiddleware()
-    original = McpError(ErrorData(code=-32000, message="deliberate", data={"x": 1}))
+    original = McpError(code=-32000, message="deliberate", data={"x": 1})
 
     async def call_next(_ctx):
         raise original
@@ -5075,7 +5092,7 @@ class TestResourceErrorCorrelation:
 
     async def test_not_found_carries_the_requested_uri_and_a_request_id(self):
         from fastmcp import Client
-        from mcp import McpError
+        from fastmcp.exceptions import McpError
 
         with pytest.raises(McpError) as excinfo:
             async with Client(server.mcp) as client:
@@ -5087,7 +5104,7 @@ class TestResourceErrorCorrelation:
     async def test_envelope_fields_are_unchanged(self):
         # The addition must not disturb the existing §6 contract.
         from fastmcp import Client
-        from mcp import McpError
+        from fastmcp.exceptions import McpError
 
         with pytest.raises(McpError) as excinfo:
             async with Client(server.mcp) as client:
@@ -5275,9 +5292,9 @@ async def test_read_only_tools_omit_meaningless_hints(clean_env):
         tools = await client.list_tools()
     for tool in tools:
         ann = tool.annotations
-        if ann is not None and ann.readOnlyHint is True:
-            assert ann.destructiveHint is None, tool.name
-            assert ann.idempotentHint is None, tool.name
+        if ann is not None and ann.read_only_hint is True:
+            assert ann.destructive_hint is None, tool.name
+            assert ann.idempotent_hint is None, tool.name
 
 
 # --- F3: sync active calls run through the detached worker (#169) -------------
@@ -6461,7 +6478,7 @@ async def test_spec_without_effort_matches_legacy_hash(monkeypatch, clean_env, t
         "model": None,
         "timeout_seconds": 60,
     }
-    assert spec["roots_source"] == "not_negotiated"
+    assert spec["roots_source"] == "unsupported"
     assert spec["git_timeout"] == 60
     excluded = {"roots_source", "git_timeout"}
     assert {k: v for k, v in spec.items() if k not in excluded} == legacy_spec
@@ -7165,7 +7182,7 @@ class TestCapabilitiesContractsDetail:
         # A mode a client cannot discover from tools/list is a mode that does not exist.
         async with Client(server.mcp) as c:
             tool = next(t for t in await c.list_tools() if t.name == "kimi_capabilities")
-        assert "contracts" in tool.inputSchema["properties"]["detail"]["enum"]
+        assert "contracts" in tool.input_schema["properties"]["detail"]["enum"]
 
     @pytest.mark.anyio
     async def test_capabilities_detail_description_explains_the_contracts_mode(self):
@@ -7175,7 +7192,7 @@ class TestCapabilitiesContractsDetail:
         # to pick the mode: its name, and the field it removes.
         async with Client(server.mcp) as c:
             tool = next(t for t in await c.list_tools() if t.name == "kimi_capabilities")
-        desc = tool.inputSchema["properties"]["detail"]["description"]
+        desc = tool.input_schema["properties"]["detail"]["description"]
         assert "contracts" in desc
         assert "tool_details" in desc
         # The tool's own description must not contradict the enum it advertises.
@@ -7191,11 +7208,11 @@ class TestCapabilitiesContractsDetail:
         others = [
             n
             for n, t in tools.items()
-            if n != "kimi_capabilities" and "detail" in t.inputSchema.get("properties", {})
+            if n != "kimi_capabilities" and "detail" in t.input_schema.get("properties", {})
         ]
         assert others, "no other detail-taking tool found — this guard would be vacuous"
         for name in others:
-            enum = tools[name].inputSchema["properties"]["detail"]["enum"]
+            enum = tools[name].input_schema["properties"]["detail"]["enum"]
             assert "contracts" not in enum, f"{name} wrongly accepts detail=contracts"
 
     @pytest.mark.anyio
@@ -7628,69 +7645,56 @@ class TestJobListNarrowing:
         assert r.structured_content["error"]["code"] == "invalid_arguments"
 
 
-def _ctx_double(*, roots_advertised: bool, roots=(), list_roots_raises=None):
-    """Minimal stand-in exposing only what _roots_from_ctx reads."""
+def _ctx_double(*, roots_advertised: bool = False, roots=(), list_roots_raises=None):
+    """Minimal Context stand-in.
 
-    class _Root:
-        def __init__(self, uri):
-            self.uri = uri
-
-    class _Caps:
-        roots = object() if roots_advertised else None
-
-    class _Params:
-        capabilities = _Caps()
-
-    class _Session:
-        client_params = _Params()
+    Since ADR 0005 (`roots/list` removed from the SDK) `_roots_from_ctx` reads nothing off
+    the context at all, so every keyword here is inert — they are retained so the many
+    call sites below keep documenting what kind of client each case once modelled, and so
+    the diff that removed the probe stays reviewable. Every one of them now yields
+    `roots_source == "unsupported"`."""
 
     class _Ctx:
-        session = _Session()
-
-        async def list_roots(self):
-            if list_roots_raises is not None:
-                raise list_roots_raises
-            return [_Root(u) for u in roots]
+        pass
 
     return _Ctx()
 
 
-class TestRootsCapabilityGating:
-    """F8: 'client has no roots' and 'the roots probe failed' stop being the same signal."""
+class TestRootsUnsupported:
+    """ADR 0005: MCP SDK v2 removed the server-to-client `roots/list` request on every
+    protocol era, so F8's three-way probe result collapses to one honest value."""
 
     @pytest.mark.anyio
-    async def test_client_without_roots_reports_not_negotiated(self, clean_env):
-        # The in-memory FastMCP client advertises capabilities.roots = None.
+    async def test_live_call_reports_unsupported(self, clean_env):
         async with Client(server.mcp) as c:
             r = await c.call_tool("kimi_dry_run", {"scope": "working_tree"}, raise_on_error=False)
         meta = r.structured_content.get("meta", r.structured_content)
-        assert meta["roots_source"] == "not_negotiated"
+        assert meta["roots_source"] == "unsupported"
 
     @pytest.mark.anyio
-    async def test_probe_failure_is_distinguishable(self, clean_env):
-        # A client that DID advertise roots but whose list_roots raises must not look
-        # identical to one that never advertised them.
-        ctx = _ctx_double(roots_advertised=True, list_roots_raises=RuntimeError("boom"))
-        paths, source = await server._roots_from_ctx(ctx)
-        assert paths == []
-        assert source == "probe_failed"
+    async def test_every_context_shape_reports_unsupported(self, clean_env, tmp_path):
+        """No context shape produces roots any more — not an absent context, not one that
+        would once have advertised the capability."""
+        for ctx in (
+            None,
+            _ctx_double(roots_advertised=False),
+            _ctx_double(roots_advertised=True, roots=[f"file://{tmp_path}"]),
+            _ctx_double(roots_advertised=True, list_roots_raises=RuntimeError("boom")),
+        ):
+            assert await server._roots_from_ctx(ctx) == ([], "unsupported")
 
-    @pytest.mark.anyio
-    async def test_advertised_roots_are_still_used(self, clean_env, tmp_path):
-        ctx = _ctx_double(roots_advertised=True, roots=[f"file://{tmp_path}"])
-        paths, source = await server._roots_from_ctx(ctx)
-        assert paths == [str(tmp_path)]
-        assert source == "client"
+    def test_retired_values_stay_in_the_type(self):
+        """`unsupported` was ADDED rather than replacing the old values: narrowing the set
+        would break a client validating a stored envelope against the published enum
+        (AGENTS.md → Versioning). They are retained, not emitted."""
+        from moonbridge.schemas import RootsSource
 
-    @pytest.mark.anyio
-    async def test_advertised_but_empty_roots_report_client_not_not_negotiated(self, clean_env):
-        # A client that DID advertise roots and answered with none is a different fact
-        # from a client that never advertised the capability at all — collapsing them
-        # would defeat the whole point of gating on the negotiated capability.
-        ctx = _ctx_double(roots_advertised=True, roots=[])
-        paths, source = await server._roots_from_ctx(ctx)
-        assert paths == []
-        assert source == "client"
+        assert set(get_args(RootsSource)) == {
+            "client",
+            "not_negotiated",
+            "probe_failed",
+            "unsupported",
+        }
 
 
 TRIAGE_META_KEY = "dev.bconnelly.moonbridge/triage"
@@ -7959,7 +7963,7 @@ async def test_delivered_sync_consult_success_carries_roots_source(
         "q", workspace_root=str(tmp_path), ctx=_ctx_double(roots_advertised=True, roots=())
     )
     assert res["ok"] is True
-    assert res["meta"]["roots_source"] == "client"
+    assert res["meta"]["roots_source"] == "unsupported"
 
 
 async def test_delivered_sync_consult_reports_probe_failure(clean_env, tmp_path, monkeypatch):
@@ -7975,7 +7979,7 @@ async def test_delivered_sync_consult_reports_probe_failure(clean_env, tmp_path,
     ctx = _ctx_double(roots_advertised=True, list_roots_raises=RuntimeError("boom"))
     res = await server.kimi_consult("q", workspace_root=str(tmp_path), ctx=ctx)
     assert res["ok"] is True
-    assert res["meta"]["roots_source"] == "probe_failed"
+    assert res["meta"]["roots_source"] == "unsupported"
 
 
 async def test_fetched_async_result_carries_originating_roots_source(
@@ -8003,7 +8007,7 @@ async def test_fetched_async_result_carries_originating_roots_source(
     # Fetch from a connection with a DIFFERENT roots state than the originating run.
     fetched = await server.kimi_job_result(job_id, workspace_root=str(tmp_path), ctx=None)
     assert fetched["ok"] is True
-    assert fetched["meta"]["roots_source"] == "client"  # originating, not the fetcher's
+    assert fetched["meta"]["roots_source"] == "unsupported"  # originating, not the fetcher's
 
 
 async def test_async_replay_handle_reports_the_attaching_call(monkeypatch, clean_env, tmp_path):
@@ -8020,7 +8024,7 @@ async def test_async_replay_handle_reports_the_attaching_call(monkeypatch, clean
         ctx=_ctx_double(roots_advertised=True, list_roots_raises=RuntimeError("boom")),
     )
     assert res["ok"] is True and res["meta"]["idempotency_replayed"] is True
-    assert res["meta"]["roots_source"] == "probe_failed"
+    assert res["meta"]["roots_source"] == "unsupported"
 
 
 async def test_lifecycle_error_envelopes_carry_roots_source(monkeypatch, clean_env, tmp_path):
@@ -8032,15 +8036,15 @@ async def test_lifecycle_error_envelopes_carry_roots_source(monkeypatch, clean_e
     ctx = _ctx_double(roots_advertised=True, list_roots_raises=RuntimeError("boom"))
     res = await server.kimi_job_status("nope", workspace_root=str(tmp_path), ctx=ctx)
     assert res["ok"] is False and res["error"]["code"] == "job_not_found"
-    assert res["meta"]["roots_source"] == "probe_failed"
+    assert res["meta"]["roots_source"] == "unsupported"
 
     res = await server.kimi_job_cancel("nope", workspace_root=str(tmp_path), ctx=ctx)
     assert res["ok"] is False and res["error"]["code"] == "job_not_found"
-    assert res["meta"]["roots_source"] == "probe_failed"
+    assert res["meta"]["roots_source"] == "unsupported"
 
     res = await server.kimi_job_result("nope", workspace_root=str(tmp_path), ctx=ctx)
     assert res["ok"] is False and res["error"]["code"] == "job_not_found"
-    assert res["meta"]["roots_source"] == "probe_failed"
+    assert res["meta"]["roots_source"] == "unsupported"
 
 
 async def test_lifecycle_invalid_detail_error_carries_roots_source(
@@ -8056,7 +8060,7 @@ async def test_lifecycle_invalid_detail_error_carries_roots_source(
         ctx=_ctx_double(roots_advertised=True, roots=()),
     )
     assert res["ok"] is False and res["error"]["code"] == "unsupported_detail"
-    assert res["meta"]["roots_source"] == "client"
+    assert res["meta"]["roots_source"] == "unsupported"
 
 
 # --- roots_source is provenance, never call identity (#393) --------------------------
@@ -8099,14 +8103,14 @@ async def test_prepare_helpers_put_roots_source_in_every_spec(monkeypatch, clean
     monkeypatch.setattr(server.worktree, "ensure_repo_with_head", lambda *a, **k: None)
     ctx = _ctx_double(roots_advertised=True, roots=())
     await server.kimi_consult("q", workspace_root=str(tmp_path), ctx=ctx)
-    assert calls["spec"]["roots_source"] == "client"
+    assert calls["spec"]["roots_source"] == "unsupported"
     await server.kimi_review_changes(workspace_root=str(tmp_path), ctx=ctx)
-    assert calls["spec"]["roots_source"] == "client"
+    assert calls["spec"]["roots_source"] == "unsupported"
     await server.kimi_delegate("do x", workspace_root=str(tmp_path), ctx=ctx)
-    assert calls["spec"]["roots_source"] == "client"
+    assert calls["spec"]["roots_source"] == "unsupported"
     # ctx=None is a real state, not a missing key: the spec records it explicitly.
     await server.kimi_consult("q", workspace_root=str(tmp_path), ctx=None)
-    assert calls["spec"]["roots_source"] == "not_negotiated"
+    assert calls["spec"]["roots_source"] == "unsupported"
 
 
 async def test_guarded_internal_error_reports_no_roots_source(monkeypatch, clean_env, tmp_path):
@@ -8299,3 +8303,45 @@ def test_status_reports_a_refused_passthrough(monkeypatch, clean_env):
     res = server.kimi_status()
     assert res["extra_args_configured"] is True
     assert res["extra_args_valid"] is False
+
+
+# --- resource-not-found is renumbered on the modern era (ADR 0005) -------------------
+class TestResourceNotFoundCodePerEra:
+    """MCP 2026-07-28 renumbered resource-not-found from -32002 to -32602 and states that
+    implementations of that revision MUST NOT emit the old code (basic/index § Error
+    Codes). Serving both eras therefore means the code is era-dependent, not a constant —
+    a single value is wrong on one side whichever one is picked."""
+
+    @pytest.mark.anyio
+    async def test_handshake_era_keeps_32002(self):
+        from fastmcp import Client
+        from fastmcp.exceptions import McpError
+
+        async with Client(server.mcp, mode="legacy") as c:
+            with pytest.raises(McpError) as excinfo:
+                await c.read_resource("kimi://no-such-resource")
+        assert excinfo.value.error.code == -32002
+
+    @pytest.mark.anyio
+    async def test_modern_era_emits_32602(self):
+        from fastmcp import Client
+        from fastmcp.exceptions import McpError
+
+        async with Client(server.mcp, mode="auto") as c:
+            with pytest.raises(McpError) as excinfo:
+                await c.read_resource("kimi://no-such-resource")
+        assert excinfo.value.error.code == -32602
+
+    @pytest.mark.anyio
+    async def test_the_envelope_survives_the_renumbering(self):
+        """The renumbering must not cost the §6 envelope in `error.data` — that carrier is
+        the whole point of this middleware (#181/F9)."""
+        from fastmcp import Client
+        from fastmcp.exceptions import McpError
+
+        async with Client(server.mcp, mode="auto") as c:
+            with pytest.raises(McpError) as excinfo:
+                await c.read_resource("kimi://no-such-resource")
+        data = excinfo.value.error.data
+        assert data["code"] == "resource_not_found"
+        assert data["request_id"]
