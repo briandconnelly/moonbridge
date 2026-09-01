@@ -1,6 +1,6 @@
 [project]
 name = "moonbridge"
-version = "0.2.0"
+version = "0.3.0"
 description = "Call Kimi Code from Claude Code or Codex for delegation, review, and second opinions"
 readme = "README.md"
 requires-python = ">=3.11"
