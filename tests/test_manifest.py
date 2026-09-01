@@ -10,7 +10,7 @@ from moonbridge import manifest, server
 _FIXTURE = Path(__file__).parent / "fixtures" / "manifest_snapshot.json"
 
 # sha256 of the canonical manifest JSON; regenerate per the test failure message.
-EXPECTED_MANIFEST_HASH = "925b6524f0f77cbd183cbda953d49d3309616a7cd5eaaf11c43272b995f6c321"
+EXPECTED_MANIFEST_HASH = "ba4cffc3b42e957cc71a6db2afed5e0f281b7b95c843aad5ba5581da68ea7a00"
 
 
 def test_canonicalize_strips_only_fastmcp_meta():
@@ -311,8 +311,18 @@ async def test_build_manifest_captures_both_protocol_eras():
     manifest guards them — a silently dropped era moves the snapshot."""
     m = await manifest.build_manifest()
     eras = m["protocol_eras"]
-    assert eras["legacy"] == "2025-11-25"
-    assert eras["modern"] == "2026-07-28"
+    assert eras["legacy"]["protocol_version"] == "2025-11-25"
+    assert eras["modern"]["protocol_version"] == "2026-07-28"
+    # The revision string alone would not guard the modern discovery surface: the modern
+    # era has no `initialize` response, so nothing else in the manifest covers what it
+    # advertises. Both eras carry their capabilities and instructions for that reason.
+    for era in eras.values():
+        assert era["capabilities"]["tools"], "tools capability missing"
+        assert era["instructions"], "server instructions missing"
+    # The two eras genuinely differ — `listChanged` is true on the handshake era and false
+    # on the sessionless one. A refactor that captured one era twice would pass every
+    # assertion above; this is what catches it.
+    assert eras["legacy"]["capabilities"] != eras["modern"]["capabilities"]
 
 
 async def test_build_manifest_initialize_is_the_legacy_handshake():
@@ -320,4 +330,4 @@ async def test_build_manifest_initialize_is_the_legacy_handshake():
     manifest client to `mode="legacy"`; a default (auto) client negotiates the modern
     era, where `initialize_result` is None and the block would vanish silently."""
     m = await manifest.build_manifest()
-    assert m["initialize"]["protocolVersion"] == m["protocol_eras"]["legacy"]
+    assert m["initialize"]["protocolVersion"] == m["protocol_eras"]["legacy"]["protocol_version"]

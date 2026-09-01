@@ -1705,8 +1705,8 @@ def kimi_capabilities(
                 "detail='summary' (default) omits raw_response.text; detail='full' includes it. "
                 "Egress: sends question+extra_context (raw, unredacted) to your configured "
                 "provider; Kimi "
-                "always runs with a resolved working dir (workspace_root, your MCP roots, "
-                "or the server cwd) and may read and send files from it. "
+                "always runs with a resolved working dir (workspace_root, else the server cwd — "
+                "MCP roots are unavailable) and may read and send files from it. "
                 f"{cli_contract.SKILLS_DISCOVERY_FACT_FULL} "
                 "A selected skill's body can reach the model. "
                 "Recorded as a terminal job (meta.job_id) recoverable via kimi_job_result "
@@ -1733,7 +1733,7 @@ def kimi_capabilities(
                 "kimi_job_status; read the consult envelope with kimi_job_result. "
                 "Egress: same as kimi_consult — sends question+extra_context (raw) to "
                 "your configured provider, plus files Kimi reads from its resolved working dir "
-                "(workspace_root, your MCP roots, or the server cwd). "
+                "(workspace_root, else the server cwd — MCP roots are unavailable). "
                 f"{cli_contract.SKILLS_DISCOVERY_FACT_FULL} "
                 "A selected skill's body can reach the model.",
             ),
@@ -1994,8 +1994,8 @@ def kimi_capabilities(
             "(and their *_async variants) each send caller content to your configured "
             "provider via the "
             "kimi CLI — consult sends question+extra_context (plus files Kimi reads "
-            "from its resolved working dir: workspace_root, your MCP roots, or the "
-            "server cwd); review sends the bounded, secret-redacted diff "
+            "from its resolved working dir: workspace_root, else the server cwd — MCP "
+            "roots are unavailable); review sends the bounded, secret-redacted diff "
             "plus your raw extra_context; delegate sends the task and lets Kimi read "
             "tracked files in the throwaway worktree. "
             f"{cli_contract.SKILLS_DISCOVERY_FACT_FULL} For delegate, that workspace is the "
@@ -2655,8 +2655,8 @@ async def kimi_consult(
 
     Data egress: this sends your `question` and `extra_context` to your configured
     Kimi provider via the
-    kimi CLI. Kimi always runs with a resolved working directory (`workspace_root`,
-    your MCP roots, or the server's cwd as a fallback), so it may read files there and
+    kimi CLI. Kimi always runs with a resolved working directory (`workspace_root`, else the
+    server's cwd as a fallback — MCP roots are unavailable), so it may read files there and
     Kimi auto-loads the resolved workspace's AGENTS.md and discovers skills from its own
     config (including `extra_skill_dirs`, which may point outside the workspace). Skill
     names and descriptions are exposed to the model up front, so that content can be sent
@@ -3533,7 +3533,7 @@ async def kimi_consult_async(
 
     Data egress: same as `kimi_consult` — sends your `question` and `extra_context`
     (raw, unredacted) to your configured provider via the kimi CLI, plus files Kimi reads from its
-    resolved working directory (`workspace_root`, your MCP roots, or the server cwd).
+    resolved working directory (`workspace_root`, else the server cwd — MCP roots are unavailable).
     Kimi auto-loads the resolved workspace's AGENTS.md and discovers skills from its own
     config (including `extra_skill_dirs`, which may point outside the workspace).
 

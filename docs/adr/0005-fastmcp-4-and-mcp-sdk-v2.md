@@ -74,8 +74,14 @@ the symbolic `error.data.code` instead.
 revision served, not the per-session negotiated value. Because "the target" alone can no longer tell
 a client whether the handshake era is still reachable, `protocol_eras_served` is added alongside it.
 The manifest guards both eras under a new `protocol_eras` section and a matching
-`FINGERPRINT_COVERS` token, captured from live handshakes rather than hardcoded, so an SDK that
+`FINGERPRINT_COVERS` token, captured from live connections rather than hardcoded, so an SDK that
 silently stops serving an era moves the snapshot.
+
+That section carries each era's **capabilities and instructions**, not just its revision string.
+The first draft stored only the revision, which made the coverage token overclaim: the modern era
+has no `initialize` response, so nothing in the manifest covered what `server/discover` advertises,
+and the two eras do differ (`listChanged` is true on the handshake era, false on the modern one).
+Caught in review on PR #12.
 
 ## Verified facts
 

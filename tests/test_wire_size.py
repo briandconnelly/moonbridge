@@ -135,6 +135,10 @@ from moonbridge.server import mcp
 # over. Budget raised to the next 500 above the measured value. The addition is not
 # compressible — narrowing the enum instead (dropping the three now-unemitted values) would
 # be a breaking change to a published value set, which is the more expensive trade.
+# Measured again 2026-09-01 (PR #12 review): the `meta.roots_source` description was rewritten
+# to define `unsupported` and mark the other three historical, and five tool descriptions that
+# still promised MCP roots could pick the working directory were corrected — both duplicated
+# across the same output schemas: 83,113 bytes. Still within budget, no further raise.
 TOOLS_LIST_BYTE_BUDGET = 83_500
 
 # The measured tools/list size as of the last deliberate review above — NOT a second gate.
@@ -147,7 +151,7 @@ TOOLS_LIST_BYTE_BUDGET = 83_500
 # history above is "still within budget, no further change" rows that grew the measured size
 # without touching the budget; the target must track every one of those too, or it silently
 # goes stale between the raises).
-TOOLS_LIST_BYTE_TARGET = 82_869
+TOOLS_LIST_BYTE_TARGET = 83_113
 
 
 def _budget_failure_message(measured: int) -> str:

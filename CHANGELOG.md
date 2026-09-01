@@ -51,6 +51,10 @@ All notable changes to this project are documented here, following
     whether the handshake era is reachable.
   - The advertised `initialize` capabilities lost `experimental: {}`, an SDK v2 change to a
     capability this server never implemented.
+  - Tool and capability descriptions that told agents their MCP roots could select the working
+    directory now say roots are unavailable and `workspace_root` is what aims a call. Five
+    published strings said the old thing; leaving them would have taught agents to trigger
+    breaking change 1 above.
   - `FINGERPRINT` moves `schema-5` -> `schema-6`. Every schema-level change is itself additive
     (`protocol_eras_served`, the `unsupported` enum value) or a value change to a field whose
     documented meaning is unchanged (`protocol_revision`) — the release is flagged breaking for the
@@ -60,9 +64,13 @@ All notable changes to this project are documented here, following
     record carrying `unsupported`, which this release stamps on every record; without the bump such
     a record would be misreported as corruption rather than a cross-release payload.
 - The manifest now guards both protocol eras under a new `protocol_eras` section (with a matching
-  `FINGERPRINT_COVERS` token), captured from live handshakes rather than hardcoded. Its client is
-  pinned to `mode="legacy"`, because a default client negotiates the sessionless era where
-  `initialize_result` is `None` and the whole `initialize` block would have vanished silently.
+  `FINGERPRINT_COVERS` token), captured from live connections rather than hardcoded — each era's
+  negotiated revision, advertised capabilities, and instructions. Capabilities are covered per era
+  because the two genuinely differ (`listChanged` is true on the handshake era, false on the modern
+  one) and the modern era has no `initialize` response, so the `initialize` section covers only the
+  legacy side. Its client is pinned to `mode="legacy"` for that section, because a default client
+  negotiates the sessionless era where `initialize_result` is `None` and the whole `initialize`
+  block would have vanished silently.
 - FastMCP deprecation warnings are errors under pytest. The camelCase compatibility bridge SDK v2
   installs is scheduled for removal, so a surviving camelCase read is a future hard failure that
   would otherwise pass CI in silence.

@@ -142,16 +142,31 @@ async def build_manifest() -> dict[str, Any]:
         k: v for k, v in kimi_capabilities(detail="full").items() if k not in _CAPABILITIES_EXCLUDE
     }
 
-    # The negotiated revision of each era this server now serves. Captured from live
-    # handshakes rather than hardcoded, so an SDK that silently stops serving an era
+    # Each era this server serves, captured from live connections rather than hardcoded, so
+    # an SDK that silently stops serving an era — or changes what it advertises on one —
     # moves the snapshot instead of leaving a stale constant behind.
-    async with Client(mcp, mode="legacy") as legacy:
-        legacy_era = legacy.protocol_version
-    async with Client(mcp, mode="auto") as modern:
-        modern_era = modern.protocol_version
+    #
+    # The revision string alone is NOT enough (Copilot review, PR #12). The two eras
+    # advertise DIFFERENT capabilities — verified: `listChanged` is true on the handshake
+    # era and false on the modern one — and the modern era has no `initialize` response, so
+    # the `initialize` section above covers only the legacy side. Capturing capabilities and
+    # instructions per era is what makes the `protocol_eras` coverage token honest: without
+    # it, a change to the sessionless `server/discover` surface moved nothing.
+    #
+    # serverInfo is deliberately excluded here: it is already guarded (minus its
+    # release-variable `version`) by the `initialize` section, and is era-independent.
+    async def _era(mode: str) -> dict[str, Any]:
+        async with Client(mcp, mode=mode) as client:
+            return {
+                "protocol_version": client.protocol_version,
+                "capabilities": _canonicalize(_dump(client.server_capabilities)),
+                "instructions": client.instructions,
+            }
+
+    protocol_eras = {"legacy": await _era("legacy"), "modern": await _era("auto")}
 
     return {
-        "protocol_eras": {"legacy": legacy_era, "modern": modern_era},
+        "protocol_eras": protocol_eras,
         "tools": sorted(tools, key=lambda t: t["name"]),
         "resources": sorted(resources, key=lambda r: r["uri"]),
         "resource_templates": sorted(templates, key=lambda t: t["uriTemplate"]),
