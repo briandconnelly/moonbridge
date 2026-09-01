@@ -313,14 +313,15 @@ _DRIFT_PATTERNS = (
 # BOTH patterns are anchored on text only kimi emits — the first on the quoted alias plus
 # `config.toml`, the second on the `failed to run prompt:` prefix. The second one MUST keep
 # that anchor: unlike the first, its tail ("does not resolve to a configured provider") is
-# an ordinary English clause, and `kimi.classify_failure` tests invalid_model FIRST — ahead
-# of drift, auth, and rate limiting — over `run.stdout` and `last_message`, which carry the
-# MODEL'S OWN prose. Unanchored, a run that merely DISCUSSES this failure would outrank its
-# real cause: genuine drift would be reported as invalid_model (silencing the one signal
-# this contract says must always be loud) and a rate limit would lose its retry_after_ms.
-# Reviewing this very repository is enough to produce such prose. Prefer a false negative
-# (a generic error, which is what this failure got before it was captured) over a false
-# positive that masks drift.
+# an ordinary English clause, and `kimi.classify_failure` searches `run.stdout` and
+# `last_message`, which carry the MODEL'S OWN prose. Unanchored, a run that merely
+# DISCUSSES this failure would be reported as invalid_model — blaming a model argument
+# that was fine — instead of the bounded nonzero_exit it deserves. Reviewing this very
+# repository is enough to produce such prose. Prefer a false negative (a generic error,
+# which is what this failure got before it was captured) over that false positive.
+# (invalid_model is now the LAST signature tested, per pontonier's shared order — #11 —
+# so an unanchored match can no longer outrank drift, auth, or a rate limit; the anchor
+# still guards the nonzero_exit case above.)
 _INVALID_MODEL_PATTERNS = (
     re.compile(r'Model ".*?" is not configured in config\.toml', re.I),
     re.compile(r"failed to run prompt: model \S+ does not resolve to a configured provider", re.I),

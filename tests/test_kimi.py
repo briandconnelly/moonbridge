@@ -412,6 +412,20 @@ def test_drift_is_checked_before_rate_limiting():
     assert kimi.classify_failure(_run(stderr=both)).code == "cli_contract_changed"
 
 
+def test_drift_is_checked_before_invalid_model():
+    """Drift outranks invalid_model, matching pontonier's shared precedence order (#11).
+
+    Neither captured invalid-model message trips a drift pattern (verified against both
+    0.35.0 and 0.39.1 captures), so this only matters when a run carries BOTH — and then
+    the contract change is the signal that must stay loud.
+    """
+    both = (
+        "error: unknown option '--output-format'\n"
+        'error: failed to run prompt: Model "nope" is not configured in config.toml.'
+    )
+    assert kimi.classify_failure(_run(stderr=both)).code == "cli_contract_changed"
+
+
 def test_an_unrecognized_failure_is_a_bounded_nonzero_exit():
     err = kimi.classify_failure(_run(stderr="something went sideways", exit_code=3))
     assert err.code == "nonzero_exit"
