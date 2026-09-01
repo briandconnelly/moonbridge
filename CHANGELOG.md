@@ -5,37 +5,38 @@ All notable changes to this project are documented here, following
 
 ## [Unreleased]
 
-### Fixed
+## [0.3.0] - 2026-09-01
 
-- **Every install was broken.** `pyproject.toml` declared `fastmcp>=3.4` with no upper bound, and
-  `.mcp.json` installs this plugin with `uvx --from git+<remote>@v<version>`, which resolves
-  dependencies fresh and does not read `uv.lock`. When fastmcp 4.0.0 published, every user's install
-  picked it up and the server failed at import — `ImportError: cannot import name 'McpError' from
-  'mcp'` — while CI stayed green against the locked fastmcp 3.4.7. The dependency is now
-  `fastmcp>=4,<5`; the upper bound turns the next major from a production break into a resolution
-  failure at upgrade time. **This fix only reaches users on release**, because `.mcp.json` pins a git
-  tag: the currently pinned tag does not import.
-- The `initialize` capability seam read `extensions` off `model_extra`, where MCP SDK v2 makes it a
-  declared field. The lookup found nothing and nulled the whole key, which would have suppressed
-  every extension the server legitimately advertises rather than only the unimplemented
-  `io.modelcontextprotocol/ui` one (#424). Found by the upgrade; regression test verified to fail
-  against the pre-fix code.
-- `classify_failure` now tests failure signatures in pontonier's shared precedence order
-  (drift -> auth -> rate limit -> invalid model), which the library documents as the part every
-  bridge must agree on (#11). It previously tested `invalid_model` first and `auth` ahead of
-  drift, so a run whose output carried both a contract-drift message and an invalid-model or
-  auth message classified as `invalid_model`/`kimi_auth_required` here and `cli_contract_changed`
-  under the shared classifier — masking the one signal that must stay loud. The old order cited
-  an unknown-alias message that "also trips the drift patterns"; verified against the 0.35.0 and
-  0.39.1 captures, it does not, so no captured kimi message changes classification. A parity
-  test now holds the classifier to the shared order on stderr input. No error code, field, or
-  documented meaning changes, so `FINGERPRINT` is unchanged.
+Upgrading is mandatory for anyone on 0.2.0: that release cannot import (see the first entry under
+Fixed). Four changes are marked **Breaking** below. Three of them are behavioral, so no schema diff
+surfaces them — read those before upgrading; the fourth (`meta.roots_source`) does show up in a
+diff, as an added enum value. `FINGERPRINT` moves `schema-5` -> `schema-6`; `RESULT_FORMAT` moves
+`8` -> `9`.
+
+### Added
+
+- `kimi-code 0.39.1` to `SUPPORTED_VERSIONS`, after re-running the full probe set from
+  `docs/UPGRADING-KIMI.md` against the binary (captures and results in `docs/kimi-help/0.39.1/`,
+  `M0-FINDINGS.md`). No guarantee moved — the read-only `--agent-file` allowlist, the
+  confidentiality limit, the silent-effort-ignore, the worktree's non-containment, the argv
+  ceiling, and the `stream-json` line shapes all hold.
+- `protocol_eras_served` on the capabilities surface: every protocol revision this server
+  negotiates, read from the installed SDK. `protocol_revision` alone names only the newest
+  revision served, so it can no longer tell a client whether the handshake era is reachable.
+- `unsupported` as a `RootsSource` value (see the roots removal under Changed). It was added
+  rather than replacing `client`/`not_negotiated`/`probe_failed`, so a stored envelope still
+  validates against the published value set.
+- A `protocol_eras` section in the manifest, with a matching `FINGERPRINT_COVERS` token,
+  capturing each era's negotiated revision, advertised capabilities, and instructions from live
+  connections. Capabilities are covered per era because the two genuinely differ (`listChanged`
+  is true on the handshake era, false on the modern one).
 
 ### Changed
 
 - **FastMCP 3.4 -> 4.0, MCP SDK 1.29 -> 2.1** (ADR 0005, superseding ADR 0004, whose own revisit
   trigger this was). The server now serves both protocol eras — the 2025-11-25 handshake and the
-  sessionless 2026-07-28 — because FastMCP 4 negotiates per connection. Agent-visible consequences:
+  sessionless 2026-07-28 — because FastMCP 4 negotiates per connection. Agent-visible
+  consequences:
   - **Breaking:** a call that omits `workspace_root` now resolves somewhere else. MCP SDK v2
     removed `ctx.list_roots()` on every era (verified, not inferred: `hasattr(Context,
     "list_roots")` is False under both `mode="legacy"` and `mode="auto"`), so no roots probe runs
@@ -46,95 +47,70 @@ All notable changes to this project are documented here, following
     it for you.
   - **Breaking:** `meta.roots_source` is now always `unsupported`, a value no existing client has
     seen. Code branching on `client`/`not_negotiated`/`probe_failed` falls through every arm.
-    `unsupported` was ADDED to `RootsSource` rather than replacing those three — they are retained
-    but never emitted, so a stored envelope still validates against the published value set.
-  - `workspace_source == "roots"`, the `workspace_outside_roots` error code, and its
-    `candidate_roots` detail are still advertised but unreachable, for the same reason. Retiring
-    them would be breaking and is deliberately deferred.
   - **Breaking:** an explicit `workspace_root` outside the client's advertised roots used to be
     refused at **zero spend** (`workspace_outside_roots`, carrying `candidate_roots`). With no
     roots to compare against, that refusal can no longer fire, so the same input now **runs and
     spends**. If you relied on it as an aim-check, you have lost it — validate the path yourself.
-    The error code and `candidate_roots` remain advertised but unreachable.
   - **Breaking:** resource-read not-found is era-dependent. `-32002` on the handshake era, but
     `-32602` on 2026-07-28, which forbids the old code — and a default FastMCP 4 client negotiates
     that era, so a client matching the numeric `-32002` stops matching. Branch on the symbolic
     `error.data.code` (`"resource_not_found"`) instead. `resource_error_carrier` documents the
     split.
-  - `protocol_revision` moves `2025-11-25` -> `2026-07-28` (the newest revision served), and the new
-    `protocol_eras_served` lists every era negotiated — the target alone can no longer tell a client
-    whether the handshake era is reachable.
+  - `workspace_source == "roots"`, the `workspace_outside_roots` error code, and its
+    `candidate_roots` detail are still advertised but unreachable, for the same reason. Retiring
+    them would be breaking and is deliberately deferred.
+  - `protocol_revision` moves `2025-11-25` -> `2026-07-28`, the newest revision served.
   - The advertised `initialize` capabilities lost `experimental: {}` — a field removal, and so
-    breaking by the letter of the table, though it announced a capability this server never
+    breaking by the letter of the rules, though it announced a capability this server never
     implemented and no client could usefully have branched on.
-  - `protocol_eras_served` lists every revision negotiated, read from the installed SDK rather
-    than hardcoded — the handshake handler echoes back any supported revision a client asks for,
-    so the set is wider than the two era-newest values a first draft of this field advertised.
+  - Tool and capability descriptions no longer tell agents their MCP roots can select the working
+    directory; they now say roots are unavailable and that `workspace_root` is what aims a call.
   - The `pydantic` floor moves `>=2` -> `>=2.12`, which MCP SDK v2 requires. A project pinning an
     older pydantic gets an unsatisfiable resolution rather than a silent downgrade.
-  - Tool and capability descriptions that told agents their MCP roots could select the working
-    directory now say roots are unavailable and `workspace_root` is what aims a call. Five
-    published strings said the old thing; leaving them would have taught agents to trigger
-    breaking change 1 above.
-  - `FINGERPRINT` moves `schema-5` -> `schema-6`. Every schema-level change is itself additive
-    (`protocol_eras_served`, the `unsupported` enum value) or a value change to a field whose
-    documented meaning is unchanged (`protocol_revision`) — the release is flagged breaking for the
-    three behavioral changes marked above, which no schema diff would have surfaced. Pre-1.0, a
-    breaking change is a minor bump, not a major.
-  - `RESULT_FORMAT` moves `8` -> `9`. A format-8 reader's closed `RootsSource` Literal rejects a
-    record carrying `unsupported`, which this release stamps on every record; without the bump such
-    a record would be misreported as corruption rather than a cross-release payload.
-- The manifest now guards both protocol eras under a new `protocol_eras` section (with a matching
-  `FINGERPRINT_COVERS` token), captured from live connections rather than hardcoded — each era's
-  negotiated revision, advertised capabilities, and instructions. Capabilities are covered per era
-  because the two genuinely differ (`listChanged` is true on the handshake era, false on the modern
-  one) and the modern era has no `initialize` response, so the `initialize` section covers only the
-  legacy side. Its client is pinned to `mode="legacy"` for that section, because a default client
-  negotiates the sessionless era where `initialize_result` is `None` and the whole `initialize`
-  block would have vanished silently.
-- FastMCP deprecation warnings are errors under pytest. The camelCase compatibility bridge SDK v2
-  installs is scheduled for removal, so a surviving camelCase read is a future hard failure that
-  would otherwise pass CI in silence.
-- Byte budgets raised deliberately, both measured: `tools/list` 83,000 -> 83,500 (the `unsupported`
-  enum value is duplicated into ~14 tools' output schemas, +206 B) and `CAPABILITIES_SCHEMA`
-  2,100 -> 2,200 B (`protocol_eras_served` carries an `items` subschema, +64 B).
-
-- `pontonier` 0.5.0 -> 0.7.0. Two upstream minors, both compatible with this bridge:
-  `CONTRACT_API_VERSION` stays 1 and the 0.7.0 addition (`RunRequest.instructions_append`)
-  is a defaulted field this bridge does not set. The one entry that reaches an agent is
-  0.6.0's: `redaction.exc_summary` now strips Unicode `Cc` code points before redacting,
-  so exception text carrying a control character produces different message text. Verified
-  by running it — an `ESC`/`NUL`-bearing exception comes back stripped. This bridge feeds
-  `exc_summary` into `error.message` prose in three places, which is human-readable prose
-  only, so per Versioning it moves no fingerprint and is not breaking; the built manifest
-  is byte-identical. The change is a hardening: a control character wedged into a secret
+- `pontonier` 0.5.0 -> 0.7.0. `CONTRACT_API_VERSION` stays 1. The one change that reaches an
+  agent: `redaction.exc_summary` now strips Unicode `Cc` code points before redacting, so
+  exception text carrying a control character produces different message text where this bridge
+  feeds `exc_summary` into `error.message`. That is human-readable prose only, so it moves no
+  fingerprint and is not breaking. It is a hardening — a control character wedged into a secret
   previously defeated the redactor's patterns outright.
-
-### Added
-
-- `kimi-code 0.39.1` to `SUPPORTED_VERSIONS`, after re-running the full probe set from
-  `docs/UPGRADING-KIMI.md` against the binary. Captures and results:
-  `docs/kimi-help/0.39.1/` (`M0-FINDINGS.md`). No guarantee moved — the read-only
-  `--agent-file` allowlist, the confidentiality limit, the silent-effort-ignore, the
-  worktree's non-containment, the argv ceiling, and the `stream-json` line shapes all
-  hold, and the agent-visible manifest is byte-identical, so `FINGERPRINT` is unchanged.
+- `FINGERPRINT` moves `schema-5` -> `schema-6` and `RESULT_FORMAT` moves `8` -> `9`. Every
+  schema-level change above is itself additive or a value change to a field whose documented
+  meaning is unchanged; the release is flagged breaking for the behavioral changes marked above.
+  `RESULT_FORMAT` moves because a format-8 reader's closed `RootsSource` Literal rejects a record
+  carrying `unsupported`, which this release stamps on every record — without the bump such a
+  record would be misreported as corruption rather than a cross-release payload.
 
 ### Fixed
 
-- A second captured invalid-model message,
-  `model X does not resolve to a configured provider`, now classifies as `invalid_model`.
-  kimi emits it when `config.toml`'s `default_model` names an alias with no
-  `[models."..."]` section, failing while it resolves the default and so reaching the
-  classifier even on a run that passed a valid `--model`. It previously matched no
-  signature and surfaced as a generic error, pointing operators at an upgrade bug rather
-  than at their own config. The pattern is anchored on kimi's `failed to run prompt:`
-  prefix: its tail is ordinary English, and `classify_failure` tests invalid_model first
-  over the model's own output, so an unanchored clause could mask genuine contract drift.
-- An unresolvable `default_model` no longer blames the caller's `model` argument. Both
-  causes still share the `invalid_model` code, but the configured-default case now names
-  `config.toml` and drops `details.field = "model"` — previously it advised omitting
-  `model` to fall back on `default_model`, the one action that cannot help when
-  `default_model` is itself the broken thing, leaving a caller circling a repair loop.
+- **Every 0.2.0 install is broken; only upgrading fixes it.** `pyproject.toml` declared
+  `fastmcp>=3.4` with no upper bound, and `.mcp.json` installs this plugin with
+  `uvx --from git+<remote>@v<version>`, which resolves dependencies fresh and does not read
+  `uv.lock`. When fastmcp 4.0.0 published, every user's install picked it up and the server failed
+  at import — `ImportError: cannot import name 'McpError' from 'mcp'` — while CI stayed green
+  against the locked fastmcp 3.4.7. The dependency is now `fastmcp>=4,<5`; the upper bound turns
+  the next major from a production break into a resolution failure at upgrade time. Because
+  `.mcp.json` pins a git tag, the fix reaches users only when they move to this release's tag.
+- The `initialize` capability seam read `extensions` off `model_extra`, where MCP SDK v2 makes it
+  a declared field. The lookup found nothing and nulled the whole key, which would have suppressed
+  every extension the server legitimately advertises rather than only the unimplemented
+  `io.modelcontextprotocol/ui` one.
+- `classify_failure` now tests failure signatures in pontonier's shared precedence order
+  (drift -> auth -> rate limit -> invalid model), which the library documents as the part every
+  bridge must agree on. It previously tested `invalid_model` first and `auth` ahead of drift, so a
+  run whose output carried both a contract-drift message and an invalid-model or auth message
+  classified as `invalid_model`/`kimi_auth_required` here and `cli_contract_changed` under the
+  shared classifier — masking the one signal that must stay loud. Verified against the 0.35.0 and
+  0.39.1 captures: no captured kimi message changes classification. No error code, field, or
+  documented meaning changes.
+- An unresolvable `default_model` in `config.toml` is now diagnosed as itself. kimi emits
+  `model X does not resolve to a configured provider` when `default_model` names an alias with no
+  `[models."..."]` section, failing while it resolves the default and so reaching the classifier
+  even on a run that passed a valid `--model`. That message previously matched no signature and
+  surfaced as a generic error, pointing operators at an upgrade bug rather than at their own
+  config; it now classifies as `invalid_model`. The repair hint for this cause names `config.toml`
+  and drops `details.field = "model"` — the caller-supplied-`model` case is unchanged, but
+  advising the configured-default case to omit `model` and fall back on `default_model` steered
+  callers into a repair loop, since `default_model` is the broken thing.
 
 ## [0.2.0] - 2026-08-18
 
