@@ -224,7 +224,7 @@ but unreachable, for the same reason.
 On a **successful** preview, `kimi_dry_run` and `kimi_delegate_dry_run` expose the same value as a
 **top-level** `roots_source` rather than under `meta`; when their error envelopes report it at all it
 sits under `meta` like every other tool, and an argument rejected at the call boundary carries none
-because no roots probe has run yet. Which run it describes depends on the envelope: a delivered
+because the value is stamped after that boundary (no probe runs at all now — see above). Which run it describes depends on the envelope: a delivered
 `kimi_consult`/`kimi_review_changes`/`kimi_delegate` result — returned synchronously or fetched
 later via `kimi_job_result`/`kimi_job_consume_result` — reports the **originating** run, like
 `tier`, while an `*_async` job handle (including an idempotency replay handle), a dry-run preview,

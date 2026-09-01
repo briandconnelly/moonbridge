@@ -12,6 +12,14 @@ from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, field_validator,
 
 from moonbridge import __version__
 
+# Every revision the installed SDK negotiates, read from the SDK rather than hardcoded so
+# an SDK upgrade that adds or drops one moves the manifest snapshot instead of leaving a
+# stale literal behind. Falls back to the known set if the SDK moves the constant.
+try:
+    from mcp_types.version import SUPPORTED_PROTOCOL_VERSIONS as _SUPPORTED_PROTOCOL_VERSIONS
+except ImportError:  # pragma: no cover - defensive: SDK layout change
+    _SUPPORTED_PROTOCOL_VERSIONS = ("2025-11-25", "2026-07-28")
+
 # The agent-visible surface the FINGERPRINT covers, as granular machine-readable
 # identifiers. This tuple is the single source of truth: CapabilitiesResult.fingerprint_covers
 # derives from it (audit F6, #178), so a client can reason about the fingerprint's
@@ -291,8 +299,8 @@ def workspace_warning_for(source: str | None, cwd: str) -> str | None:
     if source == "cwd":
         return (
             f"workspace resolved from the server's own cwd ({cwd}); pass "
-            "workspace_root (or configure an MCP root) to be sure the task "
-            "targets the intended repository"
+            "workspace_root to be sure the task targets the intended repository "
+            "(MCP roots are unavailable — the SDK removed the roots request)"
         )
     return None
 
@@ -1308,12 +1316,14 @@ class CapabilitiesResult(BaseModel):
     # whether the handshake is reachable (because it depends on session-era behavior)
     # could otherwise only find out by attempting a connection.
     protocol_eras_served: list[str] = Field(
-        default_factory=lambda: ["2025-11-25", "2026-07-28"],
+        default_factory=lambda: list(_SUPPORTED_PROTOCOL_VERSIONS),
         description=(
-            "Every MCP protocol revision this server negotiates, oldest first: the "
-            "handshake era (session via `initialize`) and the sessionless modern era "
-            "(per-request metadata). Roots are unavailable on both — pass "
-            "`workspace_root` (see `meta.roots_source`)."
+            "Every MCP protocol revision this server negotiates, oldest first. The "
+            "handshake-era revisions establish a session via `initialize` and the server "
+            "echoes back whichever of them a client requests; the newest revision is "
+            "sessionless and conveys version, identity, and capabilities as per-request "
+            "metadata. Roots are unavailable on every one of them — pass `workspace_root` "
+            "(see `meta.roots_source`)."
         ),
     )
     # The server's documented reading of its own `readOnlyHint` tool annotation (#426):

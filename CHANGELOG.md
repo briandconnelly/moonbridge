@@ -41,6 +41,11 @@ All notable changes to this project are documented here, following
   - `workspace_source == "roots"`, the `workspace_outside_roots` error code, and its
     `candidate_roots` detail are still advertised but unreachable, for the same reason. Retiring
     them would be breaking and is deliberately deferred.
+  - **Breaking:** an explicit `workspace_root` outside the client's advertised roots used to be
+    refused at **zero spend** (`workspace_outside_roots`, carrying `candidate_roots`). With no
+    roots to compare against, that refusal can no longer fire, so the same input now **runs and
+    spends**. If you relied on it as an aim-check, you have lost it — validate the path yourself.
+    The error code and `candidate_roots` remain advertised but unreachable.
   - **Breaking:** resource-read not-found is era-dependent. `-32002` on the handshake era, but
     `-32602` on 2026-07-28, which forbids the old code — and a default FastMCP 4 client negotiates
     that era, so a client matching the numeric `-32002` stops matching. Branch on the symbolic
@@ -49,8 +54,14 @@ All notable changes to this project are documented here, following
   - `protocol_revision` moves `2025-11-25` -> `2026-07-28` (the newest revision served), and the new
     `protocol_eras_served` lists every era negotiated — the target alone can no longer tell a client
     whether the handshake era is reachable.
-  - The advertised `initialize` capabilities lost `experimental: {}`, an SDK v2 change to a
-    capability this server never implemented.
+  - The advertised `initialize` capabilities lost `experimental: {}` — a field removal, and so
+    breaking by the letter of the table, though it announced a capability this server never
+    implemented and no client could usefully have branched on.
+  - `protocol_eras_served` lists every revision negotiated, read from the installed SDK rather
+    than hardcoded — the handshake handler echoes back any supported revision a client asks for,
+    so the set is wider than the two era-newest values a first draft of this field advertised.
+  - The `pydantic` floor moves `>=2` -> `>=2.12`, which MCP SDK v2 requires. A project pinning an
+    older pydantic gets an unsatisfiable resolution rather than a silent downgrade.
   - Tool and capability descriptions that told agents their MCP roots could select the working
     directory now say roots are unavailable and `workspace_root` is what aims a call. Five
     published strings said the old thing; leaving them would have taught agents to trigger

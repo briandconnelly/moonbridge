@@ -138,7 +138,12 @@ from moonbridge.server import mcp
 # Measured again 2026-09-01 (PR #12 review): the `meta.roots_source` description was rewritten
 # to define `unsupported` and mark the other three historical, and five tool descriptions that
 # still promised MCP roots could pick the working directory were corrected — both duplicated
-# across the same output schemas: 83,113 bytes. Still within budget, no further raise.
+# across the same output schemas. Measured once more after a second review pass corrected the
+# `workspace_root` parameter description and the cwd-fallback warning text — both duplicated the
+# same way, and both still telling agents an MCP root could aim a call: 83,256 bytes. Still
+# within budget, no further raise. (The parameter description was deliberately kept close to its
+# original length: a longer one breached the fan-out ceiling its PARAMETER_CONTRACTS exemption
+# was granted at, which `test_fanout_exemptions_stay_within_their_pinned_ceiling` caught.)
 TOOLS_LIST_BYTE_BUDGET = 83_500
 
 # The measured tools/list size as of the last deliberate review above — NOT a second gate.
@@ -151,7 +156,7 @@ TOOLS_LIST_BYTE_BUDGET = 83_500
 # history above is "still within budget, no further change" rows that grew the measured size
 # without touching the budget; the target must track every one of those too, or it silently
 # goes stale between the raises).
-TOOLS_LIST_BYTE_TARGET = 83_113
+TOOLS_LIST_BYTE_TARGET = 83_256
 
 
 def _budget_failure_message(measured: int) -> str:

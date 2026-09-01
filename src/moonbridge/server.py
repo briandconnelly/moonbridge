@@ -628,9 +628,15 @@ def _resource_not_found_code(context: Any) -> int:
     """The not-found code for the era this request negotiated.
 
     Fails SAFE to the legacy -32002: an unreadable protocol version means we cannot prove
-    the request is on a modern connection, and emitting the legacy code to a modern client
-    is a spec violation in the same direction the SDK itself still takes by default,
-    whereas emitting -32602 to a legacy client would break code that matches -32002."""
+    the request is on a modern connection, and emitting -32602 to a legacy client would
+    break existing callers of THIS server that match the numeric -32002.
+
+    Note this deliberately differs from bare FastMCP 4, which returns -32602 on BOTH eras
+    (probed 2026-09-01 against fastmcp 4.0.0: an unknown-resource read on a `mode="legacy"`
+    client returns -32602). An earlier version of this docstring claimed the SDK still
+    emitted the legacy code by default; that was asserted, not probed, and it was false.
+    The choice stands on its own footing — the 2025-11-25 spec specifies -32002, and this
+    server has shipped it — but it is a divergence from the framework, not a match."""
     fastmcp_context = getattr(context, "fastmcp_context", None)
     request_context = getattr(fastmcp_context, "request_context", None)
     version = getattr(request_context, "protocol_version", None)
@@ -732,9 +738,9 @@ TaskParam = Annotated[
 WorkspaceRootParam = Annotated[
     str | None,
     Field(
-        description="Absolute path to the target repo root — pass it (or an MCP root) to "
-        "target the intended repo; otherwise the call falls back to the server's own cwd "
-        "and sets meta.workspace_warning."
+        description="Absolute path to the target repo root — pass it to target the "
+        "intended repo (MCP roots are unavailable); otherwise the call falls back to the "
+        "server's own cwd and sets meta.workspace_warning."
     ),
 ]
 TranscriptPathParam = Annotated[

@@ -365,13 +365,18 @@ def test_protocol_revision_matches_installed_sdk_target():
     # must actually span both eras — an SDK upgrade that drops the handshake era should
     # fail here rather than leave this server advertising a revision it cannot serve.
     served = caps["protocol_eras_served"]
-    assert set(served) <= set(SUPPORTED_PROTOCOL_VERSIONS), (
-        f"protocol_eras_served {served} advertises a revision the installed SDK does not "
-        f"support {SUPPORTED_PROTOCOL_VERSIONS}"
+    # EQUALITY, not a subset: the field claims to name *every* revision negotiated, and the
+    # handshake handler echoes back any revision in HANDSHAKE_PROTOCOL_VERSIONS that a
+    # client requests (mcp/server/runner.py:425) — so a 2025-06-18 client really does get
+    # 2025-06-18 back. A subset assertion let the first draft advertise only two revisions
+    # while making that claim (PR #12 review).
+    assert served == list(SUPPORTED_PROTOCOL_VERSIONS), (
+        f"protocol_eras_served {served} does not match what the installed SDK negotiates "
+        f"{list(SUPPORTED_PROTOCOL_VERSIONS)}"
     )
     assert set(served) & set(HANDSHAKE_PROTOCOL_VERSIONS), "no handshake-era revision served"
     assert set(served) & set(MODERN_PROTOCOL_VERSIONS), "no modern-era revision served"
-    assert declared == max(served), "protocol_revision must be the newest era served"
+    assert declared == served[-1], "protocol_revision must be the newest revision served"
 
 
 def test_instructions_name_the_error_carrier():

@@ -58,6 +58,9 @@
       "authenticated via `kimi login`"
     ],
     "protocol_eras_served": [
+      "2024-11-05",
+      "2025-03-26",
+      "2025-06-18",
       "2025-11-25",
       "2026-07-28"
     ],
@@ -613,7 +616,7 @@
     {
       "_meta": {
         "dev.bconnelly.moonbridge/triage": {
-          "size_bytes": 9780
+          "size_bytes": 9930
         }
       },
       "mimeType": "application/schema+json",
@@ -924,7 +927,7 @@
             "type": "array"
           },
           "protocol_eras_served": {
-            "description": "Every MCP protocol revision this server negotiates, oldest first: the handshake era (session via `initialize`) and the sessionless modern era (per-request metadata). Roots are unavailable on both — pass `workspace_root` (see `meta.roots_source`).",
+            "description": "Every MCP protocol revision this server negotiates, oldest first. The handshake-era revisions establish a session via `initialize` and the server echoes back whichever of them a client requests; the newest revision is sessionless and conveys version, identity, and capabilities as per-request metadata. Roots are unavailable on every one of them — pass `workspace_root` (see `meta.roots_source`).",
             "items": {
               "type": "string"
             },
@@ -2149,7 +2152,7 @@
     {
       "_meta": {
         "dev.bconnelly.moonbridge/triage": {
-          "size_bytes": 9780
+          "size_bytes": 9930
         }
       },
       "description": "The canonical full kimi_capabilities result schema. The tool's outputSchema opaques\n`tool_details` and points here for the full shape (#242).",
@@ -3705,7 +3708,7 @@
               }
             ],
             "default": null,
-            "description": "Absolute path to the target repo root — pass it (or an MCP root) to target the intended repo; otherwise the call falls back to the server's own cwd and sets meta.workspace_warning."
+            "description": "Absolute path to the target repo root — pass it to target the intended repo (MCP roots are unavailable); otherwise the call falls back to the server's own cwd and sets meta.workspace_warning."
           }
         },
         "required": [
@@ -3994,7 +3997,7 @@
               }
             ],
             "default": null,
-            "description": "Absolute path to the target repo root — pass it (or an MCP root) to target the intended repo; otherwise the call falls back to the server's own cwd and sets meta.workspace_warning."
+            "description": "Absolute path to the target repo root — pass it to target the intended repo (MCP roots are unavailable); otherwise the call falls back to the server's own cwd and sets meta.workspace_warning."
           }
         },
         "required": [
@@ -4282,7 +4285,7 @@
               }
             ],
             "default": null,
-            "description": "Absolute path to the target repo root — pass it (or an MCP root) to target the intended repo; otherwise the call falls back to the server's own cwd and sets meta.workspace_warning."
+            "description": "Absolute path to the target repo root — pass it to target the intended repo (MCP roots are unavailable); otherwise the call falls back to the server's own cwd and sets meta.workspace_warning."
           }
         },
         "required": [
@@ -4569,7 +4572,7 @@
               }
             ],
             "default": null,
-            "description": "Absolute path to the target repo root — pass it (or an MCP root) to target the intended repo; otherwise the call falls back to the server's own cwd and sets meta.workspace_warning."
+            "description": "Absolute path to the target repo root — pass it to target the intended repo (MCP roots are unavailable); otherwise the call falls back to the server's own cwd and sets meta.workspace_warning."
           }
         },
         "required": [
@@ -4820,7 +4823,7 @@
               }
             ],
             "default": null,
-            "description": "Absolute path to the target repo root — pass it (or an MCP root) to target the intended repo; otherwise the call falls back to the server's own cwd and sets meta.workspace_warning."
+            "description": "Absolute path to the target repo root — pass it to target the intended repo (MCP roots are unavailable); otherwise the call falls back to the server's own cwd and sets meta.workspace_warning."
           }
         },
         "required": [
@@ -5184,7 +5187,7 @@
               }
             ],
             "default": null,
-            "description": "Absolute path to the target repo root — pass it (or an MCP root) to target the intended repo; otherwise the call falls back to the server's own cwd and sets meta.workspace_warning."
+            "description": "Absolute path to the target repo root — pass it to target the intended repo (MCP roots are unavailable); otherwise the call falls back to the server's own cwd and sets meta.workspace_warning."
           }
         },
         "type": "object"
@@ -5569,7 +5572,7 @@
               }
             ],
             "default": null,
-            "description": "Absolute path to the target repo root — pass it (or an MCP root) to target the intended repo; otherwise the call falls back to the server's own cwd and sets meta.workspace_warning."
+            "description": "Absolute path to the target repo root — pass it to target the intended repo (MCP roots are unavailable); otherwise the call falls back to the server's own cwd and sets meta.workspace_warning."
           }
         },
         "required": [
@@ -5811,7 +5814,7 @@
               }
             ],
             "default": null,
-            "description": "Absolute path to the target repo root — pass it (or an MCP root) to target the intended repo; otherwise the call falls back to the server's own cwd and sets meta.workspace_warning."
+            "description": "Absolute path to the target repo root — pass it to target the intended repo (MCP roots are unavailable); otherwise the call falls back to the server's own cwd and sets meta.workspace_warning."
           }
         },
         "required": [
@@ -5933,7 +5936,7 @@
               }
             ],
             "default": null,
-            "description": "Absolute path to the target repo root — pass it (or an MCP root) to target the intended repo; otherwise the call falls back to the server's own cwd and sets meta.workspace_warning."
+            "description": "Absolute path to the target repo root — pass it to target the intended repo (MCP roots are unavailable); otherwise the call falls back to the server's own cwd and sets meta.workspace_warning."
           }
         },
         "type": "object"
@@ -6144,7 +6147,7 @@
               }
             ],
             "default": null,
-            "description": "Absolute path to the target repo root — pass it (or an MCP root) to target the intended repo; otherwise the call falls back to the server's own cwd and sets meta.workspace_warning."
+            "description": "Absolute path to the target repo root — pass it to target the intended repo (MCP roots are unavailable); otherwise the call falls back to the server's own cwd and sets meta.workspace_warning."
           }
         },
         "required": [
@@ -6237,7 +6240,7 @@
               }
             ],
             "default": null,
-            "description": "Absolute path to the target repo root — pass it (or an MCP root) to target the intended repo; otherwise the call falls back to the server's own cwd and sets meta.workspace_warning."
+            "description": "Absolute path to the target repo root — pass it to target the intended repo (MCP roots are unavailable); otherwise the call falls back to the server's own cwd and sets meta.workspace_warning."
           }
         },
         "required": [
@@ -6784,7 +6787,7 @@
               }
             ],
             "default": null,
-            "description": "Absolute path to the target repo root — pass it (or an MCP root) to target the intended repo; otherwise the call falls back to the server's own cwd and sets meta.workspace_warning."
+            "description": "Absolute path to the target repo root — pass it to target the intended repo (MCP roots are unavailable); otherwise the call falls back to the server's own cwd and sets meta.workspace_warning."
           }
         },
         "type": "object"
@@ -7238,7 +7241,7 @@
               }
             ],
             "default": null,
-            "description": "Absolute path to the target repo root — pass it (or an MCP root) to target the intended repo; otherwise the call falls back to the server's own cwd and sets meta.workspace_warning."
+            "description": "Absolute path to the target repo root — pass it to target the intended repo (MCP roots are unavailable); otherwise the call falls back to the server's own cwd and sets meta.workspace_warning."
           }
         },
         "type": "object"

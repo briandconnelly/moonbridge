@@ -10,7 +10,7 @@ from moonbridge import manifest, server
 _FIXTURE = Path(__file__).parent / "fixtures" / "manifest_snapshot.json"
 
 # sha256 of the canonical manifest JSON; regenerate per the test failure message.
-EXPECTED_MANIFEST_HASH = "ba4cffc3b42e957cc71a6db2afed5e0f281b7b95c843aad5ba5581da68ea7a00"
+EXPECTED_MANIFEST_HASH = "d5451adcba740acc3e5d41141a875a73894468fc9c342940d80306d8f85c1956"
 
 
 def test_canonicalize_strips_only_fastmcp_meta():

@@ -16,7 +16,7 @@
           "reasoning_effort": "high",
           "redacted_paths": [],
           "request_id": "00000000000000000000000000000000",
-          "roots_source": "client",
+          "roots_source": "unsupported",
           "sandbox": "read-only",
           "security_warnings": [],
           "server_version": "0.0.0",
@@ -107,7 +107,7 @@
           "reasoning_effort": "high",
           "redacted_paths": [],
           "request_id": "00000000000000000000000000000000",
-          "roots_source": "client",
+          "roots_source": "unsupported",
           "sandbox": "read-only",
           "scope": "branch",
           "security_warnings": [],
@@ -169,7 +169,7 @@
           "reasoning_effort": "high",
           "redacted_paths": [],
           "request_id": "00000000000000000000000000000000",
-          "roots_source": "not_negotiated",
+          "roots_source": "unsupported",
           "sandbox": "read-only",
           "scope": "commit",
           "security_warnings": [],
@@ -186,7 +186,7 @@
             "total_tokens": 6
           },
           "workspace_source": "cwd",
-          "workspace_warning": "workspace resolved from the server's own cwd (/repo); pass workspace_root (or configure an MCP root) to be sure the task targets the intended repository"
+          "workspace_warning": "workspace resolved from the server's own cwd (/repo); pass workspace_root to be sure the task targets the intended repository (MCP roots are unavailable — the SDK removed the roots request)"
         },
         "next_steps": [],
         "ok": true,
@@ -218,7 +218,7 @@
           "reasoning_effort": "high",
           "redacted_paths": [],
           "request_id": "00000000000000000000000000000000",
-          "roots_source": "client",
+          "roots_source": "unsupported",
           "sandbox": "read-only",
           "security_warnings": [],
           "server_version": "0.0.0",
@@ -309,7 +309,7 @@
           "reasoning_effort": "high",
           "redacted_paths": [],
           "request_id": "00000000000000000000000000000000",
-          "roots_source": "client",
+          "roots_source": "unsupported",
           "sandbox": "read-only",
           "scope": "branch",
           "security_warnings": [],
@@ -371,7 +371,7 @@
           "reasoning_effort": "high",
           "redacted_paths": [],
           "request_id": "00000000000000000000000000000000",
-          "roots_source": "not_negotiated",
+          "roots_source": "unsupported",
           "sandbox": "read-only",
           "scope": "commit",
           "security_warnings": [],
@@ -388,7 +388,7 @@
             "total_tokens": 6
           },
           "workspace_source": "cwd",
-          "workspace_warning": "workspace resolved from the server's own cwd (/repo); pass workspace_root (or configure an MCP root) to be sure the task targets the intended repository"
+          "workspace_warning": "workspace resolved from the server's own cwd (/repo); pass workspace_root to be sure the task targets the intended repository (MCP roots are unavailable — the SDK removed the roots request)"
         },
         "next_steps": [],
         "ok": true,

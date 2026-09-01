@@ -68,7 +68,7 @@ def test_populated_optional_meta_keys_survive_delivery():
         assert consult["model"] == "a-model"
         assert consult["session_id"] == "sess-1"
         assert consult["reasoning_effort"] == "high"
-        assert consult["roots_source"] == "client"
+        assert consult["roots_source"] == "unsupported"
         assert consult["workspace_source"] == "param"
         assert consult["usage"]["total_tokens"] == 6
         # A POPULATED FALSY optional: `slim_meta` keys on `is None`, so 0 must arrive.
