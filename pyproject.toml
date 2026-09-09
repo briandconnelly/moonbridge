@@ -23,10 +23,10 @@ classifiers = [
     "Topic :: Software Development",
 ]
 dependencies = [
-    "anyio>=4",
-    "pontonier==0.7.0",
-    "fastmcp>=4,<5",
-    "pydantic>=2.12",
+    "anyio>=4.15.1",
+    "pontonier==0.9.0",
+    "fastmcp>=4.0.3,<5",
+    "pydantic>=2.13.5",
 ]
 
 [project.urls]
