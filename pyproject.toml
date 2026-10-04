@@ -1,6 +1,6 @@
 [project]
 name = "moonbridge"
-version = "0.3.0"
+version = "0.4.0"
 description = "Deprecated: superseded by amicus. Call Kimi Code from Claude Code or Codex for delegation, review, and second opinions"
 readme = "README.md"
 requires-python = ">=3.11"
