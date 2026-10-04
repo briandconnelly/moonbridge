@@ -840,7 +840,11 @@ def _wire_catalog_bytes() -> int:
 # (+24 B) — still within cap, no further change.
 # Tighten deliberately when the surface legitimately shrinks; a bump means the wire
 # response grew — justify it.
-CATALOG_BYTE_CAP = 87_500
+# Measured again 2026-10-04 (#20, a lifecycle record in every tool's `_meta` plus a
+# deprecation lead on every description; see test_wire_size.py for why neither can move):
+# 83,160 -> 88,312 bytes (+5,152 B) — over cap; cap raised to the next 500 above the
+# measured value.
+CATALOG_BYTE_CAP = 88_500
 
 
 def test_wire_catalog_under_cap():
@@ -999,7 +1003,7 @@ def test_async_lifecycle_advertises_activity_without_touching_progress_support()
 
 
 def test_fingerprint_is_pinned():
-    assert FINGERPRINT == "moonbridge/0.1/schema-6"
+    assert FINGERPRINT == "moonbridge/0.1/schema-7"
 
 
 def test_fingerprint_covers_is_a_nonempty_stable_tuple():

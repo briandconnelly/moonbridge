@@ -2441,7 +2441,7 @@ def test_job_status_model_requires_result_ok_from_store():
 
 
 def test_fingerprint_is_pinned():
-    assert FINGERPRINT == "moonbridge/0.1/schema-6"
+    assert FINGERPRINT == "moonbridge/0.1/schema-7"
 
 
 def test_capabilities_payload_discloses_fingerprint_covers():
@@ -7024,6 +7024,14 @@ class TestCapabilitiesDetail:
         f = len(json.dumps(full, separators=(",", ":")))
         assert s < f, f"summary ({s}) must be smaller than full ({f})"
         # The point of the finding: the default must be materially cheaper, not marginally.
+        # Measured without the deprecation marker (#20): it ships identically in both modes
+        # by design, so it adds the same ~3.5 KB to each side and says nothing about what
+        # summary trims. Measured 2026-10-04: 0.496 without it, 0.561 with it.
+        for payload in (summary, full):
+            for entry in payload["tool_details"]:
+                entry.pop("deprecation")
+        s = len(json.dumps(summary, separators=(",", ":")))
+        f = len(json.dumps(full, separators=(",", ":")))
         assert s < f * 0.55
 
     @pytest.mark.anyio
@@ -7348,6 +7356,187 @@ class TestToolDisplayMetadata:
             assert (t.meta or {}).get(STABILITY_META_KEY) == expected[t.name], (
                 f"{t.name}: tools/list tier disagrees with kimi_capabilities"
             )
+
+
+# --- deprecation lifecycle markers (#20) -----------------------------------------------
+# Spelled out rather than read from server._TOOL_SUCCESSORS, the map the surfaces are built
+# from: a derived expectation would stay green if a successor were wrong.
+_EXPECTED_SUCCESSORS = {
+    "kimi_status": "amicus_backends",
+    "kimi_capabilities": "amicus_capabilities",
+    "kimi_models": "amicus_models",
+    "kimi_consult": "amicus_consult",
+    "kimi_consult_async": "amicus_consult_async",
+    "kimi_review_changes": "amicus_review_changes",
+    "kimi_review_changes_async": "amicus_review_changes_async",
+    "kimi_delegate": "amicus_delegate",
+    "kimi_delegate_async": "amicus_delegate_async",
+    "kimi_dry_run": "amicus_review_changes_dry_run",
+    "kimi_delegate_dry_run": "amicus_delegate_dry_run",
+    "kimi_job_status": "amicus_job_status",
+    "kimi_job_result": "amicus_job_result",
+    "kimi_job_consume_result": "amicus_job_consume_result",
+    "kimi_job_cancel": "amicus_job_cancel",
+    "kimi_job_list": "amicus_job_list",
+}
+# amicus's paid tools, dry runs, and amicus_models require `backend`; its job, capabilities,
+# and backends tools don't (verified against amicus's tools/list, 2026-10-04).
+_SUCCESSOR_REQUIRES_BACKEND = {
+    "kimi_models",
+    "kimi_consult",
+    "kimi_consult_async",
+    "kimi_review_changes",
+    "kimi_review_changes_async",
+    "kimi_delegate",
+    "kimi_delegate_async",
+    "kimi_dry_run",
+    "kimi_delegate_dry_run",
+}
+_JOB_TOOLS = (
+    "kimi_job_status",
+    "kimi_job_result",
+    "kimi_job_consume_result",
+    "kimi_job_cancel",
+    "kimi_job_list",
+)
+LIFECYCLE_META_KEY = "dev.bconnelly.moonbridge/lifecycle"
+
+
+async def _wire_tools() -> dict:
+    async with Client(server.mcp) as c:
+        return {t.name: t for t in await c.list_tools()}
+
+
+def _marker(tool) -> dict:
+    return tool.meta[LIFECYCLE_META_KEY]["deprecation"]
+
+
+class TestDeprecationMarkers:
+    """#20: moonbridge is deprecated in favor of amicus, and 0.4.0 is its final release."""
+
+    @pytest.mark.anyio
+    async def test_every_tool_carries_a_deprecation_marker_in_meta(self):
+        """The notice in `instructions` misses clients that don't show them, so each tool's
+        own discovery record carries the marker. Per the lifecycle convention, stability and
+        deprecation ride together under one namespaced `<reverse-dns>/lifecycle` key."""
+        tools = await _wire_tools()
+        assert set(tools) == set(_EXPECTED_SUCCESSORS), "a tool gained or lost a marker"
+        for name, tool in tools.items():
+            lifecycle = (tool.meta or {}).get(LIFECYCLE_META_KEY)
+            assert lifecycle is not None, name
+            assert set(lifecycle) == {"stability", "deprecation"}, name
+            marker = lifecycle["deprecation"]
+            assert set(marker) == {"since", "removal_at_or_after", "replaced_by", "migration"}
+            # No earlier release announced the deprecation, so it takes effect in the final one.
+            assert marker["since"] == "0.4.0", name
+            # A version, not a date: 0.4.0 is the final release, so the earliest version a
+            # tool could disappear in is one that will never be published.
+            assert marker["removal_at_or_after"] == "0.5.0", name
+            assert marker["replaced_by"] == _EXPECTED_SUCCESSORS[name], name
+            assert marker["migration"].strip(), name
+
+    @pytest.mark.anyio
+    async def test_lifecycle_stability_uses_the_closed_tier_set(self):
+        """The pre-existing stability key stays as it was (removing it would break its
+        readers). The lifecycle copy uses the convention's closed tier set, so the server-wide
+        "alpha" can't appear there: an inheriting tool gets null, as on its capabilities
+        entry (a Copilot finding on the codex-in-claude port of this change)."""
+        tools = await _wire_tools()
+        for name, tool in tools.items():
+            legacy = tool.meta[STABILITY_META_KEY]
+            lifecycle = tool.meta[LIFECYCLE_META_KEY]["stability"]
+            assert legacy in {"alpha", "experimental"}, name
+            assert lifecycle in {"stable", "preview", "experimental", None}, name
+            assert lifecycle == (None if legacy == "alpha" else legacy), name
+
+    @pytest.mark.anyio
+    async def test_migration_names_backend_only_where_the_successor_requires_it(self):
+        tools = await _wire_tools()
+        for name, tool in tools.items():
+            migration = _marker(tool)["migration"]
+            assert ('backend="kimi"' in migration) == (name in _SUCCESSOR_REQUIRES_BACKEND), name
+
+    @pytest.mark.anyio
+    async def test_migration_maps_isolation_wherever_the_tool_takes_it(self):
+        """moonbridge's `isolation` becomes amicus's `backend_options.isolation`; say so on
+        exactly the tools that accept `isolation`, read from their wire input schemas."""
+        tools = await _wire_tools()
+        takes_isolation = {
+            n for n, t in tools.items() if "isolation" in t.input_schema["properties"]
+        }
+        assert len(takes_isolation) == 8  # the consult/review/delegate family and both dry runs
+        for name, tool in tools.items():
+            migration = _marker(tool)["migration"]
+            assert ("backend_options.isolation" in migration) == (name in takes_isolation), name
+
+    @pytest.mark.anyio
+    async def test_job_tool_migration_points_at_this_servers_job_tools(self):
+        tools = await _wire_tools()
+        for name in _JOB_TOOLS:
+            migration = _marker(tools[name])["migration"]
+            assert "do not carry over" in migration, name
+            # kimi_job_status and kimi_job_list can't finish a job, so the shared text must
+            # point at the job tools as a set, not "this tool".
+            assert "this server's job tools" in migration, name
+
+    @pytest.mark.anyio
+    async def test_every_tool_description_leads_with_the_deprecation(self):
+        """Models see descriptions even where neither `instructions` nor `_meta` reach them."""
+        tools = await _wire_tools()
+        for name, tool in tools.items():
+            successor = _EXPECTED_SUCCESSORS[name]
+            tail = f"use {successor}." if successor else "amicus has no equivalent."
+            assert tool.description.startswith(f"Deprecated: {tail} "), name
+
+    @pytest.mark.anyio
+    @pytest.mark.parametrize("detail", ["summary", "full"])
+    async def test_capabilities_mirror_the_meta_marker(self, detail):
+        """kimi_capabilities carries the same marker per tool in both inventory modes —
+        summary projects entries down to a field list, which would silently drop it."""
+        tools = await _wire_tools()
+        async with Client(server.mcp) as c:
+            caps = (await c.call_tool("kimi_capabilities", {"detail": detail})).structured_content
+        by_name = {t["name"]: t for t in caps["tool_details"]}
+        assert set(by_name) == set(tools)
+        for name, tool in tools.items():
+            assert by_name[name]["deprecation"] == _marker(tool), name
+            assert by_name[name]["stability"] == tool.meta[LIFECYCLE_META_KEY]["stability"], name
+
+    def test_replaced_by_survives_exclude_none(self):
+        """`replaced_by` is null when amicus has no successor; exclude_none would strip it,
+        so _normalize_tool_details restores it. No tool here lacks a successor today, so
+        exercise the restore directly."""
+        entry = {"name": "x", "deprecation": {"since": "0.4.0", "migration": "m"}}
+        assert server._normalize_tool_details(entry)["deprecation"]["replaced_by"] is None
+
+    def test_instructions_and_policy_name_the_final_release(self):
+        policy = server.kimi_capabilities()["deprecation_policy"]
+        for text in (policy, server.CAPABILITY_SUMMARY):
+            assert "0.4.0 is the final release" in text
+            assert "https://github.com/briandconnelly/amicus" in text
+            # Prose describing the markers must not promise every tool names a successor.
+            assert "null where amicus has none" in text
+
+    def test_instructions_open_with_the_notice(self):
+        assert server.CAPABILITY_SUMMARY.startswith(
+            "DEPRECATED: moonbridge is superseded by amicus"
+        )
+        assert "prefer amicus's tools" in server.CAPABILITY_SUMMARY
+
+    def test_capabilities_docstring_lists_deprecation_in_summary_mode(self):
+        """The detail="summary" paragraph enumerates the fields that mode keeps; it must
+        name the marker it now carries."""
+        doc = server.kimi_capabilities.__doc__ or ""
+        summary_para = doc.split('`detail="summary"`', 1)[1].split('`detail="full"`', 1)[0]
+        assert "deprecation" in summary_para
+
+    @pytest.mark.anyio
+    async def test_capabilities_detail_param_lists_deprecation_in_summary_mode(self):
+        """Clients that read inputSchema rather than the description need the same
+        disclosure."""
+        tools = await _wire_tools()
+        detail = tools["kimi_capabilities"].input_schema["properties"]["detail"]["description"]
+        assert "deprecation" in detail.split("'full'", 1)[0]
 
 
 async def _start_async_job_envelope(monkeypatch, tmp_path) -> dict:

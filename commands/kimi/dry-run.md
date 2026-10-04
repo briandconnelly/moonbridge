@@ -1,7 +1,11 @@
 ---
-description: Preview what a Kimi review would send — scope, diff size, redactions (free)
+description: "(Deprecated: use amicus) Preview what a Kimi review would send — scope, diff size, redactions (free)"
 argument-hint: "[working_tree|branch <base>|commit <sha>]"
 ---
+
+**Deprecated:** moonbridge is superseded by amicus. If amicus's tools are available,
+use `amicus_review_changes_dry_run` with `backend="kimi"` instead, following
+amicus's `collaborating-with-amicus` skill, and stop here. Otherwise continue below.
 
 Call the `kimi_dry_run` MCP tool from the moonbridge server (free — no model
 call) to preview what a `kimi_review_changes` call would send.

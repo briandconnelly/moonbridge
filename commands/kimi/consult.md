@@ -1,7 +1,11 @@
 ---
-description: Ask Kimi (a different model) for a read-only second opinion
+description: "(Deprecated: use amicus) Ask Kimi (a different model) for a read-only second opinion"
 argument-hint: "<question>"
 ---
+
+**Deprecated:** moonbridge is superseded by amicus. If amicus's tools are available,
+use `amicus_consult` with `backend="kimi"` instead, following amicus's
+`collaborating-with-amicus` skill, and stop here. Otherwise continue below.
 
 Ask Kimi Code for an independent second opinion using the `kimi_consult` MCP
 tool from the moonbridge server.

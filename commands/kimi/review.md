@@ -1,7 +1,11 @@
 ---
-description: Have Kimi review your git changes and return structured findings
+description: "(Deprecated: use amicus) Have Kimi review your git changes and return structured findings"
 argument-hint: "[working_tree|branch <base>|commit <sha>]"
 ---
+
+**Deprecated:** moonbridge is superseded by amicus. If amicus's tools are available,
+use `amicus_review_changes` with `backend="kimi"` instead, following amicus's
+`collaborating-with-amicus` skill, and stop here. Otherwise continue below.
 
 Use the `kimi_review_changes` MCP tool from the moonbridge server to get an
 independent code review from Kimi.

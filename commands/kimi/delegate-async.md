@@ -1,7 +1,12 @@
 ---
-description: Delegate a coding task to Kimi in the background; get a job_id to poll
+description: "(Deprecated: use amicus) Delegate a coding task to Kimi in the background; get a job_id to poll"
 argument-hint: "<task description>"
 ---
+
+**Deprecated:** moonbridge is superseded by amicus. If amicus's tools are available,
+use `amicus_delegate_async` with `backend="kimi"` (poll it with the `amicus_job_*`
+tools) instead, following amicus's `collaborating-with-amicus` skill, and stop here.
+Otherwise continue below.
 
 Delegate a long-running coding task to Kimi Code in the background using the
 `kimi_delegate_async` MCP tool from the moonbridge server.

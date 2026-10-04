@@ -192,6 +192,22 @@ def test_skills_present_with_frontmatter():
     assert {"independent-attempt.md", "review-revise.md"} <= references
 
 
+def test_commands_have_valid_frontmatter():
+    """Every commands/**/*.md has a YAML-mapping frontmatter with a string description. An
+    unquoted description containing ": " (e.g. "(Deprecated: use amicus) ...") is not valid
+    YAML, so a command loader cannot read the file (Copilot, #22)."""
+    command_files = sorted((ROOT / "commands").rglob("*.md"))
+    assert command_files, "no slash commands found under commands/"
+    for command_md in command_files:
+        lines = command_md.read_text().splitlines()
+        assert lines and lines[0] == "---", f"{command_md} frontmatter must start on line one"
+        closing_fence = next((i for i, line in enumerate(lines[1:], 1) if line == "---"), None)
+        assert closing_fence is not None, f"{command_md} frontmatter is never closed"
+        parsed = yaml.safe_load("\n".join(lines[1:closing_fence]))
+        assert isinstance(parsed, dict), f"{command_md} frontmatter must be a YAML mapping"
+        assert isinstance(parsed.get("description"), str), f"{command_md} needs a description"
+
+
 def _recorded_treatment_passes(scenarios_text: str) -> set[str]:
     """Scenario ids with a passing treatment row in the '## Run record' table.
 
