@@ -5,6 +5,13 @@ All notable changes to this project are documented here, following
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-04
+
+The final release. moonbridge is deprecated in favor of
+[amicus](https://github.com/briandconnelly/amicus), and the repository is archived after this
+release ships. Nothing is breaking: every tool still works, and installed versions keep running
+without fixes. `FINGERPRINT` moves `schema-6` -> `schema-7`; `RESULT_FORMAT` is unchanged at `9`.
+
 ### Deprecated
 
 - **moonbridge is deprecated in favor of [amicus](https://github.com/briandconnelly/amicus), and
@@ -47,6 +54,8 @@ All notable changes to this project are documented here, following
 
   The new 0.9.0 protocol fields (cache-token `Usage`, `ClassifiedFailure` repair data,
   `OutcomeInspector`) are not adopted.
+- Runtime dependency floors raised to the versions CI tests against: `anyio>=4.15.1`,
+  `fastmcp>=4.0.3,<5`, and `pydantic>=2.13.5`.
 
 ## [0.3.0] - 2026-09-01
 
