@@ -1,7 +1,7 @@
 {
   "name": "moonbridge",
   "interface": {
-    "displayName": "Moonbridge (for Codex)"
+    "displayName": "Moonbridge (for Codex) — deprecated"
   },
   "plugins": [
     {

@@ -5,6 +5,35 @@ All notable changes to this project are documented here, following
 
 ## [Unreleased]
 
+### Deprecated
+
+- **moonbridge is deprecated in favor of [amicus](https://github.com/briandconnelly/amicus), and
+  0.4.0 is its final release** (#20). amicus calls Kimi and other backends through one MCP
+  server. The repository is archived after 0.4.0 ships. Installed versions keep running but get
+  no fixes or releases. The server instructions now open with a notice that tells agents to
+  prefer amicus's tools when both are installed. `kimi_capabilities`' `deprecation_policy`, the
+  README, the plugin and marketplace descriptions, and the package metadata (classifier
+  `Development Status :: 7 - Inactive`) carry the same notice.
+- **Every tool carries a deprecation marker** (#20). The marker is
+  `{since, removal_at_or_after, replaced_by, migration}`, with `since: "0.4.0"` and
+  `removal_at_or_after: "0.5.0"`: the first version a tool could disappear in, which will never
+  be published. It appears in two places:
+  - a new `dev.bconnelly.moonbridge/lifecycle` `_meta` key holding `{stability, deprecation}`.
+    The existing `.../stability` key is unchanged;
+  - a new `deprecation` field on each `kimi_capabilities` entry, in both `summary` and `full`
+    modes.
+
+  Each tool description now opens with `Deprecated: use <successor>.`. Every tool has an amicus
+  successor. Most map to the `amicus_*` tool of the same name; the exceptions are
+  `kimi_status` → `amicus_backends` and `kimi_dry_run` → `amicus_review_changes_dry_run`. The
+  migration text says to pass `backend="kimi"` only where amicus requires it, and maps
+  `isolation` to `backend_options.isolation`. Job ids don't carry over to amicus, so finish jobs
+  you started here with this server's job tools. The bundled skill and the `/kimi:*` slash
+  commands now route to amicus when its tools are available.
+
+  `FINGERPRINT` moves `schema-6` → `schema-7`. This is not breaking: it adds fields and wording,
+  and every tool still works.
+
 ### Changed
 
 - `pontonier` 0.7.0 -> 0.9.0 (#17). `CONTRACT_API_VERSION` stays 1 and both releases are

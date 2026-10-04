@@ -1,7 +1,7 @@
 [project]
 name = "moonbridge"
 version = "0.3.0"
-description = "Call Kimi Code from Claude Code or Codex for delegation, review, and second opinions"
+description = "Deprecated: superseded by amicus. Call Kimi Code from Claude Code or Codex for delegation, review, and second opinions"
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
@@ -10,7 +10,7 @@ authors = [
 ]
 keywords = ["moonbridge", "kimi", "claude-code", "codex", "code-review", "delegation", "mcp", "plugin"]
 classifiers = [
-    "Development Status :: 4 - Beta",
+    "Development Status :: 7 - Inactive",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Operating System :: MacOS",

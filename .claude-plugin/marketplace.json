@@ -7,7 +7,7 @@
     {
       "name": "moonbridge",
       "source": "./",
-      "description": "Call Kimi Code from Claude Code for delegation, review, and second opinions."
+      "description": "Deprecated: superseded by amicus (https://github.com/briandconnelly/amicus); 0.4.0 is the final release. Call Kimi Code from Claude Code for delegation, review, and second opinions."
     }
   ]
 }

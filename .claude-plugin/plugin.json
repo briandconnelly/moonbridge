@@ -1,7 +1,7 @@
 {
   "name": "moonbridge",
   "version": "0.3.0",
-  "description": "Call Kimi Code from Claude Code for delegation, review, and second opinions.",
+  "description": "Deprecated: superseded by amicus (https://github.com/briandconnelly/amicus); 0.4.0 is the final release. Call Kimi Code from Claude Code for delegation, review, and second opinions.",
   "author": {
     "name": "Brian Connelly"
   },
@@ -20,9 +20,9 @@
   "commands": "./commands/",
   "mcpServers": "./.mcp.json",
   "interface": {
-    "displayName": "Moonbridge (for Claude Code)",
-    "shortDescription": "Delegate to Kimi, review changes, and get second opinions.",
-    "longDescription": "moonbridge lets Claude Code call the Kimi Code CLI for an independent second opinion, structured code review, and delegated coding tasks. Delegation runs in a throwaway git worktree and returns a reviewable diff that is never applied to your working tree. Because the kimi CLI has no sandbox, consult and review additionally run under a generated agent profile with no shell or write tools.",
+    "displayName": "Moonbridge (for Claude Code) — deprecated",
+    "shortDescription": "Deprecated: use amicus. 0.4.0 is the final release.",
+    "longDescription": "Deprecated: moonbridge is superseded by amicus (https://github.com/briandconnelly/amicus), which calls Kimi and other backends. 0.4.0 is the final release; the repository is archived after it ships. moonbridge lets Claude Code call the Kimi Code CLI for an independent second opinion, structured code review, and delegated coding tasks. Delegation runs in a throwaway git worktree and returns a reviewable diff that is never applied to your working tree. Because the kimi CLI has no sandbox, consult and review additionally run under a generated agent profile with no shell or write tools.",
     "developerName": "Brian Connelly",
     "category": "Developer Tools",
     "capabilities": [

@@ -9,6 +9,14 @@ It gives your primary coding agent another model to ask—one that can challenge
 diff, or try an implementation while you keep control of the result. Moonbridge ships plugin
 integrations for Claude Code and Codex; other clients can use its local stdio server.
 
+> [!WARNING]
+> **Deprecated.** Moonbridge is superseded by [**amicus**](https://github.com/briandconnelly/amicus),
+> which calls Kimi (`backend="kimi"`) and other backends (Codex, Claude Code) through one MCP
+> server. **0.4.0 is the final release.** The repository is archived after it
+> ships: installed versions keep running, but get no fixes or releases. New users should install
+> amicus. Each tool's deprecation marker (in its `_meta` and its `kimi_capabilities` entry) names
+> its amicus successor.
+
 **Contents:** [Why Moonbridge?](#why-moonbridge) · [Requirements](#requirements) ·
 [Quick start](#quick-start) · [Safety model](#safety-model) · [Tools](#tools) ·
 [Configuration](#configuration) · [Development](#development) · [Documentation](#documentation)

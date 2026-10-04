@@ -1,17 +1,30 @@
 ---
 name: collaborating-with-kimi
 description: >-
-  Use whenever the host coding agent should call or compose with Kimi: an ordinary consult, code review,
-  delegated implementation, async run, independent two-model attempt, or declared
-  review–revise workflow. Trigger on requests such as “ask Kimi,” “get a second opinion,” “have
-  Kimi review this,” “delegate this to Kimi,” “have both models attempt this,” or “run
-  review–revise,” and at
-  self-initiated decision points: choosing a hard-to-reverse approach, after two failed fixes,
-  before declaring risky work complete, or when an independent implementation would help. Route to
-  the matching reference and compose with applicable process skills.
+  Deprecated: when amicus's tools are installed, use amicus's collaborating-with-amicus skill
+  instead. Otherwise, use whenever the host coding agent should call Kimi: a consult, code review,
+  delegated implementation, async run, independent two-model attempt, or declared review–revise
+  workflow. Trigger on “ask Kimi,” “get a second opinion,” “have Kimi review this,” “delegate this
+  to Kimi,” “have both models attempt this,” or “run review–revise,” and at decision points:
+  choosing a hard-to-reverse approach, after two failed fixes, or before declaring risky work
+  complete. Route to the matching reference and compose with applicable process skills.
 ---
 
 # Collaborating with Kimi
+
+## Deprecated: use amicus
+
+moonbridge is superseded by [amicus](https://github.com/briandconnelly/amicus), which calls Kimi
+and other backends. 0.4.0 is moonbridge's final release; it gets no fixes after that.
+
+- If amicus's tools (`amicus_*`) are available, stop here: load amicus's
+  `collaborating-with-amicus` skill and use amicus for this request. Pass `backend="kimi"` on
+  each amicus call that takes a `backend`.
+- Each `kimi_*` tool's deprecation marker (in its `_meta` and its `kimi_capabilities` entry)
+  names its amicus successor in `replaced_by` and says what to change in `migration`.
+- Job ids do not carry over to amicus: finish jobs started here with this server's
+  `kimi_job_*` tools.
+- Use the rest of this skill only when amicus is not installed.
 
 Use this skill as the router and shared safety contract for every Kimi workflow. Retain
 responsibility for the work, and compose this guidance with applicable planning, debugging, review,

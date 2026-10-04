@@ -57,8 +57,8 @@ listed so nobody re-adds the reassuring wording.
 - **No network isolation.** A delegated task can push, fetch, install, and call out.
 - **No quota channel.** kimi exposes nothing equivalent to a rate-limit read, and its provider is
   user-configured, so `kimi_status` reports `rate_limit: unavailable` rather than guessing.
-- **No session transfer.** kimi has no app-server import equivalent. (`kimi acp` is the plausible
-  future route; it is not used.)
+- **No session transfer.** kimi has no app-server import equivalent. (`kimi acp` was a plausible
+  route, but it was never built.)
 - **No operator passthrough.** kimi exposes no config-override, profile, or feature flags, and
   reuses `-p` for **prompt** and `-c` for **continue** — so `MOONBRIDGE_EXTRA_ARGS` refuses
   everything rather than risk overriding a run's real instructions.

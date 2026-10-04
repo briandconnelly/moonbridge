@@ -144,7 +144,15 @@ from moonbridge.server import mcp
 # within budget, no further raise. (The parameter description was deliberately kept close to its
 # original length: a longer one breached the fan-out ceiling its PARAMETER_CONTRACTS exemption
 # was granted at, which `test_fanout_exemptions_stay_within_their_pinned_ceiling` caught.)
-TOOLS_LIST_BYTE_BUDGET = 83_500
+# Measured 2026-10-04 (#20, per-tool deprecation markers: each of the 16 tools carries a
+# `{stability, deprecation}` lifecycle record under a namespaced `_meta` key and leads its
+# description with its amicus successor. A client that shows neither the server instructions
+# nor `_meta` still reads descriptions, so neither copy can move to a resource): 83,256 ->
+# 88,408 bytes (+5,152 B, +6.2%) — over budget; budget raised to the next 500 above the
+# measured value. Compacted first: the migration prose leaves the successor's name to
+# `replaced_by` instead of restating it, and the description prefix leaves the final-release
+# fact to the marker and the instructions.
+TOOLS_LIST_BYTE_BUDGET = 88_500
 
 # The measured tools/list size as of the last deliberate review above — NOT a second gate.
 # The budget assertion below is the only hard failure; this exists purely so the assertion's
@@ -156,7 +164,7 @@ TOOLS_LIST_BYTE_BUDGET = 83_500
 # history above is "still within budget, no further change" rows that grew the measured size
 # without touching the budget; the target must track every one of those too, or it silently
 # goes stale between the raises).
-TOOLS_LIST_BYTE_TARGET = 83_256
+TOOLS_LIST_BYTE_TARGET = 88_408
 
 
 def _budget_failure_message(measured: int) -> str:

@@ -1,7 +1,11 @@
 ---
-description: Delegate a coding task to Kimi; get back a reviewable diff (not applied)
+description: (Deprecated: use amicus) Delegate a coding task to Kimi; get back a reviewable diff (not applied)
 argument-hint: "<task description>"
 ---
+
+**Deprecated:** moonbridge is superseded by amicus. If amicus's tools are available,
+use `amicus_delegate` with `backend="kimi"` instead, following amicus's
+`collaborating-with-amicus` skill, and stop here. Otherwise continue below.
 
 Delegate a coding task to Kimi Code using the `kimi_delegate` MCP tool from the
 moonbridge server.
