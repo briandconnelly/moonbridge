@@ -1,5 +1,5 @@
 ---
-description: (Deprecated: use amicus) Have Kimi review your git changes and return structured findings
+description: "(Deprecated: use amicus) Have Kimi review your git changes and return structured findings"
 argument-hint: "[working_tree|branch <base>|commit <sha>]"
 ---
 

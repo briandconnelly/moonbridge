@@ -1,5 +1,5 @@
 ---
-description: (Deprecated: use amicus) Ask Kimi (a different model) for a read-only second opinion
+description: "(Deprecated: use amicus) Ask Kimi (a different model) for a read-only second opinion"
 argument-hint: "<question>"
 ---
 

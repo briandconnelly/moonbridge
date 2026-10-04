@@ -1,5 +1,5 @@
 ---
-description: (Deprecated: use amicus) Delegate a coding task to Kimi; get back a reviewable diff (not applied)
+description: "(Deprecated: use amicus) Delegate a coding task to Kimi; get back a reviewable diff (not applied)"
 argument-hint: "<task description>"
 ---
 

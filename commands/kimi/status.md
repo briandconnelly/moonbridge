@@ -1,5 +1,5 @@
 ---
-description: (Deprecated: use amicus) Check that the Kimi CLI is installed, authenticated, and ready
+description: "(Deprecated: use amicus) Check that the Kimi CLI is installed, authenticated, and ready"
 ---
 
 **Deprecated:** moonbridge is superseded by amicus. If amicus's tools are available,

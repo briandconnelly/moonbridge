@@ -1,5 +1,5 @@
 ---
-description: (Deprecated: use amicus) Delegate a coding task to Kimi in the background; get a job_id to poll
+description: "(Deprecated: use amicus) Delegate a coding task to Kimi in the background; get a job_id to poll"
 argument-hint: "<task description>"
 ---
 

@@ -1,5 +1,5 @@
 ---
-description: (Deprecated: use amicus) Preview what a Kimi review would send — scope, diff size, redactions (free)
+description: "(Deprecated: use amicus) Preview what a Kimi review would send — scope, diff size, redactions (free)"
 argument-hint: "[working_tree|branch <base>|commit <sha>]"
 ---
 
