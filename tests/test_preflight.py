@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pontonier.core.runtime import CommandRun
+from pontonier.core.runtime import run_sync_capture as _real_run_sync_capture
 
 from moonbridge import cli_contract, preflight
 
@@ -85,6 +86,19 @@ def test_is_supported_fail_open_when_probe_fails(monkeypatch):
     fs = preflight.flag_support(force=True)
     assert not fs.help_parsed
     # Fail open: unknown flags treated as supported.
+    assert preflight.is_supported("--anything", fs)
+
+
+def test_flag_support_fails_open_when_kimi_is_not_executable(monkeypatch, tmp_path):
+    # Spawns for real: the conftest guard would stub this KIMI_BIN as missing. Under
+    # pontonier < 0.8.0 the unexecutable binary raised PermissionError here instead.
+    binary = tmp_path / "kimi"
+    binary.write_text("#!/bin/sh\necho hi\n")
+    binary.chmod(0o644)
+    monkeypatch.setattr(cli_contract, "KIMI_BIN", str(binary))
+    monkeypatch.setattr(preflight.runtime, "run_sync_capture", _real_run_sync_capture)
+    fs = preflight.flag_support(force=True)
+    assert not fs.help_parsed
     assert preflight.is_supported("--anything", fs)
 
 

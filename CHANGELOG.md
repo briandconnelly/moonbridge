@@ -5,6 +5,20 @@ All notable changes to this project are documented here, following
 
 ## [Unreleased]
 
+### Changed
+
+- `pontonier` 0.7.0 -> 0.9.0 (#17). `CONTRACT_API_VERSION` stays 1 and both releases are
+  additive, so no fingerprint moves. Two runner fixes reach this bridge without code changes:
+  - A `kimi` that is present but cannot be executed (no execute bit, a directory on `PATH`)
+    used to make `kimi_version`, `login_status`, and `preflight.flag_support` raise
+    `PermissionError`, breaking `flag_support`'s fail-open promise. They now degrade exactly as
+    for an absent binary.
+  - Undecodable bytes in kimi's output are decoded with U+FFFD replacement instead of breaking
+    the run or silently discarding the output.
+
+  The new 0.9.0 protocol fields (cache-token `Usage`, `ClassifiedFailure` repair data,
+  `OutcomeInspector`) are not adopted.
+
 ## [0.3.0] - 2026-09-01
 
 Upgrading is mandatory for anyone on 0.2.0: that release cannot import (see the first entry under
