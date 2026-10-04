@@ -17,6 +17,7 @@ from pathlib import Path
 
 import pytest
 from pontonier.core.runtime import CommandRun
+from pontonier.core.runtime import run_sync_capture as _real_run_sync_capture
 
 from moonbridge import cli_contract, kimi
 from moonbridge.preflight import FlagSupport
@@ -543,6 +544,28 @@ def test_kimi_version_returns_none_when_absent(monkeypatch):
         lambda *a, **k: CommandRun("", BINARY_NOT_FOUND, 127, 1, False),
     )
     assert kimi.kimi_version() is None
+
+
+def _unexecutable_kimi(monkeypatch, tmp_path: Path) -> None:
+    """Point KIMI_BIN at a present-but-unexecutable file and spawn it for real.
+
+    The autouse guard in conftest stubs every KIMI_BIN spawn as missing, which would
+    hide the raise this exercises, so the real runner is restored.
+    """
+    binary = tmp_path / "kimi"
+    binary.write_text("#!/bin/sh\necho hi\n")
+    binary.chmod(0o644)
+    monkeypatch.setattr(cli_contract, "KIMI_BIN", str(binary))
+    monkeypatch.setattr("pontonier.core.runtime.run_sync_capture", _real_run_sync_capture)
+
+
+def test_probes_degrade_like_absent_when_kimi_is_not_executable(monkeypatch, tmp_path):
+    # Under pontonier < 0.8.0 a present-but-unexecutable binary escaped
+    # run_sync_capture as PermissionError, so kimi_status raised instead of
+    # reporting kimi unavailable.
+    _unexecutable_kimi(monkeypatch, tmp_path)
+    assert kimi.kimi_version() is None
+    assert kimi.login_status() == (None, None)
 
 
 async def test_run_kimi_exec_surfaces_help_gate_drops_from_the_adapter(monkeypatch, tmp_path):
